@@ -84,20 +84,6 @@ export function Home() {
           </div>
         </section>
 
-        <section className="experience-strip">
-          <div className="wrap">
-            <span>
-              EXPERIENCE ACROSS
-              <br />
-              <strong>AGRICULTURE &amp; INDUSTRY</strong>
-            </span>
-            <div>Netafim</div>
-            <div>Finolex Plastro</div>
-            <div>Kirloskar Brothers</div>
-            <div>MAIDC</div>
-          </div>
-        </section>
-
         <section id="method" className="section wrap">
           <div className="section-heading">
             <div>
