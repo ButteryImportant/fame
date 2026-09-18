@@ -1,0 +1,17 @@
+services:
+  fame:
+    build: .
+    env_file: .env
+    environment:
+      PORT: 4173
+      DATABASE_PATH: /app/data/fame.sqlite
+    ports:
+      - "127.0.0.1:4173:4173"
+    volumes:
+      - fame-data:/app/data
+      - ./private-media:/app/private-media:ro
+      - fame-backups:/app/backups
+    restart: unless-stopped
+volumes:
+  fame-data:
+  fame-backups:

@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.env
+data
+backups
+test-results
+private-media/*.mp4
+private-media/*.webm
+.sites-runtime
+*.zip
