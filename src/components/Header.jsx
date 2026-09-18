@@ -1,0 +1,49 @@
+import { useState, useEffect } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Brand, Arrow } from './shared';
+
+export function Header() {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => setOpen(false), [location.pathname]);
+
+  return (
+    <header className="site-header">
+      <div className="wrap nav">
+        <Brand />
+        <nav className={open ? 'main-nav open' : 'main-nav'} aria-label="Main navigation">
+          <NavLink to="/about">Meet Manmath</NavLink>
+          <NavLink to="/courses">Our programmes</NavLink>
+          <a href="/#method">The FAME approach</a>
+        </nav>
+        <div className="nav-actions">
+          {user ? (
+            <Link className="button small" to="/dashboard">
+              My learning <Arrow />
+            </Link>
+          ) : (
+            <>
+              <Link className="sign-in" to="/login">
+                Sign in
+              </Link>
+              <Link className="button small" to="/courses">
+                Explore courses <Arrow />
+              </Link>
+            </>
+          )}
+          <button
+            className="icon-button mobile-menu"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X /> : <Menu />}
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}

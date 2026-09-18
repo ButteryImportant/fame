@@ -1,0 +1,1 @@
+import{r as o,e as n}from"./index-CrqT8pT6.js";function i(a,s=""){const[l,r]=o.useState({data:null,error:"",loading:!0});return o.useEffect(()=>{let t=!0;return r(e=>({...e,error:"",loading:!0})),n(a).then(e=>t&&r({data:e,error:"",loading:!1})).catch(e=>t&&r({data:null,error:e.message,loading:!1})),()=>{t=!1}},[a,s]),l}export{i as u};
