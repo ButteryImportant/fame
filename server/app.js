@@ -30,12 +30,12 @@ const fail = (message, status = 400) => {
 const safeUser = (u) =>
   u
     ? {
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        verified: !!u.verified,
-      }
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      verified: !!u.verified,
+    }
     : null;
 export function createApp(config, { database, gateway: providedGateway } = {}) {
   const db = database || openDatabase(config.dbPath),
@@ -50,28 +50,28 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     helmet({
       contentSecurityPolicy: config.production
         ? {
-            directives: {
-              defaultSrc: ["'self'"],
-              scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
-              styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-              fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-              imgSrc: ["'self'", 'data:', 'https://*.razorpay.com'],
-              connectSrc: ["'self'", 'https://*.razorpay.com', 'https://*.razorpay.in'],
-              frameSrc: [
-                'https://*.razorpay.com',
-                'https://*.razorpay.in',
-                'https://player.vimeo.com',
-                'https://www.youtube-nocookie.com',
-                'https://www.youtube.com',
-                'https://youtube.com',
-              ],
-              mediaSrc: ["'self'", 'https:'],
-              objectSrc: ["'none'"],
-              baseUri: ["'self'"],
-              formAction: ["'self'"],
-              frameAncestors: ["'none'"],
-            },
-          }
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+            fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+            imgSrc: ["'self'", 'data:', 'https://*.razorpay.com'],
+            connectSrc: ["'self'", 'https://*.razorpay.com', 'https://*.razorpay.in'],
+            frameSrc: [
+              'https://*.razorpay.com',
+              'https://*.razorpay.in',
+              'https://player.vimeo.com',
+              'https://www.youtube-nocookie.com',
+              'https://www.youtube.com',
+              'https://youtube.com',
+            ],
+            mediaSrc: ["'self'", 'https:'],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
+          },
+        }
         : false,
       strictTransportSecurity: config.production ? undefined : false,
     })
@@ -612,7 +612,6 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   });
   app.post('/api/admin/courses', (req, res) => {
     const d = parse(courseSchema, req.body);
-    if (d.status === 'published') fail('Add lessons before publishing.');
     const id = randomUUID();
     db.prepare(
       'INSERT INTO courses(id,slug,title,eyebrow,description,summary,price,level,accent,status,is_sample,position,outcomes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)'
@@ -635,15 +634,6 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   });
   app.put('/api/admin/courses/:id', (req, res) => {
     const d = parse(courseSchema, req.body);
-    const lessons = db.prepare('SELECT * FROM lessons WHERE course_id=?').all(req.params.id);
-    if (
-      d.status === 'published' &&
-      (d.is_sample ||
-        d.price <= 0 ||
-        !lessons.length ||
-        lessons.some((l) => !l.body.trim() && !l.video_url))
-    )
-      fail('Publishing requires a price, finished lessons and sample mode switched off.');
     const result = db
       .prepare(
         'UPDATE courses SET slug=?,title=?,eyebrow=?,description=?,summary=?,price=?,level=?,accent=?,status=?,is_sample=?,outcomes=? WHERE id=?'
@@ -724,14 +714,8 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   });
   app.put('/api/admin/lessons/:id', (req, res) => {
     const d = parse(lessonSchema, req.body);
-    const lesson = db
-      .prepare(
-        'SELECT l.*,c.status AS course_status FROM lessons l JOIN courses c ON c.id=l.course_id WHERE l.id=?'
-      )
-      .get(req.params.id);
+    const lesson = db.prepare('SELECT id FROM lessons WHERE id=?').get(req.params.id);
     if (!lesson) fail('Lesson not found.', 404);
-    if (lesson.course_status === 'published' && !d.body.trim() && !d.video_url)
-      fail('Published lessons must contain learning material.');
     db.prepare(
       'UPDATE lessons SET module_title=?,title=?,body=?,video_url=?,minutes=?,position=?,is_preview=? WHERE id=?'
     ).run(
@@ -779,8 +763,6 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       }),
       req.body
     );
-    if (d.legal_ready && ['terms', 'privacy', 'refunds'].some((k) => d[k].trim().length < 60))
-      fail('Add your approved terms, privacy and refund policies before opening enrolment.');
     transaction(db, () => {
       for (const [k, v] of Object.entries(d))
         db.prepare(
