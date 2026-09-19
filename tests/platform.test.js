@@ -69,3 +69,97 @@ test('Admin can grant and revoke course access to any arbitrary email address', 
   const revokedOrder = f.db.prepare('SELECT status FROM orders WHERE id=?').get(grantRes.body.orderId);
   assert.equal(revokedOrder.status, 'refunded');
 }));
+
+test('Community doubts, rich personality profiles, and shareable public handles function end-to-end', () => run('demo', async f => {
+  const alice = f.client();
+  const aliceUser = await alice.register('alice.foodie@example.com');
+  const bob = f.client();
+  const bobUser = await bob.register('bob.founder@example.com');
+
+  // 1. Initial profile fetch
+  const initialMe = await alice.call('/profile/me');
+  assert.equal(initialMe.status, 200);
+  assert.ok(initialMe.body.profile.handle.startsWith('test'));
+
+  // 2. Update profile with custom handle, avatar, headline, bio, business stage, social links
+  const updateRes = await alice.call('/profile/me', 'PUT', {
+    name: 'Alice AgroInnovator',
+    handle: 'alice_millet',
+    avatar: 'data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+    headline: 'Founder @ Millet Crunch | Ready-to-cook innovator',
+    bio: 'Pioneering millet-based extruded snacks with zero refined flour. Building India first clean-label healthy munching brand.',
+    location: 'Pune, Maharashtra',
+    business_stage: 'Pilot Batch & Feedback',
+    focus_area: 'Millets, Vacuum Frying, Nitrogen Sealing',
+    website: 'https://milletcrunch.in',
+    linkedin: 'https://linkedin.com/in/alice-millet',
+    instagram: 'https://instagram.com/alice_millet',
+    twitter: 'https://twitter.com/alice_millet',
+  });
+  assert.equal(updateRes.status, 200);
+  assert.equal(updateRes.body.profile.handle, 'alice_millet');
+  assert.equal(updateRes.body.profile.business_stage, 'Pilot Batch & Feedback');
+
+  // 3. Handle conflict check
+  const conflictRes = await bob.call('/profile/me', 'PUT', {
+    handle: 'alice_millet',
+    headline: 'Trying to steal handle',
+  });
+  assert.equal(conflictRes.status, 409);
+
+  // 4. Public shareable profile: /api/u/alice_millet
+  const publicRes = await f.client().call('/u/alice_millet');
+  assert.equal(publicRes.status, 200);
+  assert.equal(publicRes.body.profile.name, 'Alice AgroInnovator');
+  assert.equal(publicRes.body.profile.handle, 'alice_millet');
+  assert.equal(publicRes.body.profile.avatar, 'data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA=');
+  assert.equal(publicRes.body.profile.headline, 'Founder @ Millet Crunch | Ready-to-cook innovator');
+
+  // 5. Post a community doubt
+  const postRes = await alice.call('/community/posts', 'POST', {
+    title: 'How to calculate vacuum frying moisture content for millets?',
+    body: 'We are experimenting with vacuum frying foxtail millets at 110 degrees C. What final moisture level ensures crispiness without rancidity?',
+    category: 'Packaging & Compliance',
+  });
+  assert.equal(postRes.status, 201);
+  const postId = postRes.body.id;
+  assert.ok(postId);
+
+  // 6. Upvote doubt
+  const upvoteRes = await bob.call(`/community/posts/${postId}/upvote`, 'POST');
+  assert.equal(upvoteRes.status, 200);
+  assert.equal(upvoteRes.body.upvoted, true);
+  assert.equal(upvoteRes.body.count, 1);
+
+  // Toggle upvote
+  const unvoteRes = await bob.call(`/community/posts/${postId}/upvote`, 'POST');
+  assert.equal(unvoteRes.status, 200);
+  assert.equal(unvoteRes.body.upvoted, false);
+  assert.equal(unvoteRes.body.count, 0);
+
+  // Upvote again
+  await bob.call(`/community/posts/${postId}/upvote`, 'POST');
+
+  // 7. Post a reply
+  const replyRes = await bob.call(`/community/posts/${postId}/replies`, 'POST', {
+    body: 'For vacuum fried millets, keep moisture under 2.5% and verify with moisture analyzer before packing with 99.9% nitrogen flush.',
+  });
+  assert.equal(replyRes.status, 201);
+  const replyId = replyRes.body.replyId;
+  assert.ok(replyId);
+
+  // 8. Author marks reply as accepted solution
+  const solutionRes = await alice.call(`/community/replies/${replyId}/solution`, 'POST');
+  assert.equal(solutionRes.status, 200);
+  assert.equal(solutionRes.body.is_solution, true);
+
+  // 9. Fetch post thread and verify
+  const threadRes = await f.client().call(`/community/posts/${postId}`);
+  assert.equal(threadRes.status, 200);
+  assert.equal(threadRes.body.post.is_resolved, 1);
+  assert.equal(threadRes.body.post.author_handle, 'alice_millet');
+  assert.equal(threadRes.body.replies.length, 1);
+  assert.equal(threadRes.body.replies[0].is_solution, 1);
+  assert.equal(threadRes.body.replies[0].author_handle, bobUser.handle);
+}));
+

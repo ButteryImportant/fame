@@ -23,6 +23,9 @@ const Checkout = lazy(() => import('./pages/Checkout').then((m) => ({ default: m
 const Account = lazy(() => import('./pages/Account').then((m) => ({ default: m.Account })));
 const Policy = lazy(() => import('./pages/Policy').then((m) => ({ default: m.Policy })));
 const Admin = lazy(() => import('./owner.jsx').then((m) => ({ default: m.Admin })));
+const Community = lazy(() => import('./pages/Community').then((m) => ({ default: m.Community })));
+const CommunityPost = lazy(() => import('./pages/CommunityPost').then((m) => ({ default: m.CommunityPost })));
+const PublicProfile = lazy(() => import('./pages/PublicProfile').then((m) => ({ default: m.PublicProfile })));
 
 // ─── RequireAuth ──────────────────────────────────────────────────────────────
 function RequireAuth({ children }) {
@@ -151,6 +154,9 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/courses" element={<Courses />} />
             <Route path="/courses/:slug" element={<CourseDetail />} />
+            <Route path="/community" element={<Community />} />
+            <Route path="/community/:postId" element={<CommunityPost />} />
+            <Route path="/u/:handle" element={<PublicProfile />} />
             <Route path="/login" element={<AuthPage />} />
             <Route path="/register" element={<AuthPage mode="register" />} />
             <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />

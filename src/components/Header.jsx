@@ -18,6 +18,7 @@ export function Header() {
         <nav className={open ? 'main-nav open' : 'main-nav'} aria-label="Main navigation">
           <NavLink to="/about">Meet Manmath</NavLink>
           <NavLink to="/courses">Our programmes</NavLink>
+          <NavLink to="/community">Community</NavLink>
           <a href="/#method">The FAME approach</a>
         </nav>
         <div className="nav-actions">

@@ -21,7 +21,14 @@ export function openDatabase(filename) {
     CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,reset_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS mail_jobs(id TEXT PRIMARY KEY,recipient TEXT NOT NULL,subject TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_attempt INTEGER NOT NULL,created_at INTEGER NOT NULL);
-    PRAGMA user_version=1;`);
+    CREATE TABLE IF NOT EXISTS profiles(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,handle TEXT UNIQUE NOT NULL,avatar TEXT NOT NULL DEFAULT '',headline TEXT NOT NULL DEFAULT '',bio TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',business_stage TEXT NOT NULL DEFAULT 'Idea Phase',focus_area TEXT NOT NULL DEFAULT '',website TEXT NOT NULL DEFAULT '',linkedin TEXT NOT NULL DEFAULT '',instagram TEXT NOT NULL DEFAULT '',twitter TEXT NOT NULL DEFAULT '',updated_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS idx_profiles_handle ON profiles(handle);
+    CREATE TABLE IF NOT EXISTS community_posts(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,title TEXT NOT NULL,body TEXT NOT NULL,category TEXT NOT NULL DEFAULT 'General',is_resolved INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS idx_community_posts_created ON community_posts(created_at DESC);
+    CREATE TABLE IF NOT EXISTS community_replies(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,body TEXT NOT NULL,is_solution INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS idx_community_replies_post ON community_replies(post_id,created_at ASC);
+    CREATE TABLE IF NOT EXISTS community_upvotes(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,created_at INTEGER NOT NULL,PRIMARY KEY(user_id,post_id));
+    PRAGMA user_version=2;`);
   seed(db);
   return db;
 }

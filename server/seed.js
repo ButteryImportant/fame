@@ -164,6 +164,76 @@ export function ensureManmathAdmin(db, targetEmail = 'manmathbiradar@gmail.com')
   );
 }
 
+export function ensureProfilesAndCommunity(db) {
+  try {
+    const adminUser =
+      db.prepare("SELECT id FROM users WHERE lower(email) = 'manmathbiradar@gmail.com'").get() ||
+      db.prepare("SELECT id FROM users WHERE lower(email) = 'manmath'").get() ||
+      db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
+
+    if (adminUser) {
+      db.prepare(`
+        INSERT OR IGNORE INTO profiles(
+          user_id, handle, avatar, headline, bio, location,
+          business_stage, focus_area, website, linkedin, instagram, twitter, updated_at
+        ) VALUES(?, 'manmath', '/images/manmath-biradar.jpg',
+          'Founder & Chief Mentor · FAME',
+          'Empowering entrepreneurs and food innovators to build scalable, profitable agro-food brands through rigorous product validation and unit economics.',
+          'Maharashtra, India',
+          'Founder & Mentor',
+          'Agro-Processing, Millets, Ready-to-Cook & Scalable FMCG',
+          'https://fame.manmathbiradar.com',
+          'https://linkedin.com/in/manmathbiradar',
+          'https://instagram.com/manmathbiradar',
+          'https://twitter.com/manmathbiradar',
+          ?
+        )
+      `).run(adminUser.id, Date.now());
+    }
+
+    // Seed 2 initial foundational discussions if empty
+    if (!db.prepare('SELECT count(*) AS n FROM community_posts').get().n && adminUser) {
+      const hasCourse = db.prepare("SELECT 1 FROM courses WHERE id='blueprint'").get();
+      const courseRef = hasCourse ? 'blueprint' : null;
+      const p1 = 'post-millet-shelf-life';
+      const p2 = 'post-contract-vs-own-plant';
+      const now = Date.now();
+      db.prepare(`
+        INSERT INTO community_posts(id, user_id, course_id, title, body, category, is_resolved, created_at, updated_at)
+        VALUES(?, ?, ?, 'How should a first-time food founder estimate shelf-life testing costs and FSSAI timelines?',
+        'When building our initial sample batches for ready-to-eat roasted snacks, how long does accelerated shelf-life testing usually take at NABL labs, and what budget should we keep aside before our first retail pilot?',
+        'Packaging & Compliance', 1, ?, ?)
+      `).run(p1, adminUser.id, courseRef, now - 86400000 * 2, now - 86400000);
+
+      db.prepare(`
+        INSERT INTO community_replies(id, post_id, user_id, body, is_solution, created_at)
+        VALUES('rep-millet-shelf-life-1', ?, ?,
+        'For accelerated testing (at 38°C / 90% RH), NABL accredited laboratories typically require 45 to 60 days to simulate a 6-month shelf life. Budget approximately ₹12,000 to ₹18,000 for standard microbial and moisture parameters. Make sure you run tests in the final barrier packaging film you plan to use for retail!',
+        1, ?)
+      `).run(p1, adminUser.id, now - 86400000);
+
+      db.prepare(`
+        INSERT INTO community_posts(id, user_id, course_id, title, body, category, is_resolved, created_at, updated_at)
+        VALUES(?, ?, ?, 'Contract manufacturing (Co-packing) vs owning your own mini-unit for the first 1,000 units?',
+        'We are deciding between investing ₹6 lakhs in basic machinery or outsourcing to a contract manufacturer who requires a 2,000 unit minimum order. What do you recommend at the validation stage?',
+        'Unit Economics & Sourcing', 0, ?, ?)
+      `).run(p2, adminUser.id, courseRef, now - 43200000, now - 43200000);
+
+      db.prepare(`
+        INSERT INTO community_replies(id, post_id, user_id, body, is_solution, created_at)
+        VALUES('rep-plant-1', ?, ?,
+        'Always prioritize preserving capital for market validation. If a co-packer allows you to reach customers with zero capex, negotiate a smaller trial batch or pilot with manual sealers. Own manufacturing brings fixed overheads before you have proven repeat orders.',
+        0, ?)
+      `).run(p2, adminUser.id, now - 21600000);
+
+      db.prepare('INSERT OR IGNORE INTO community_upvotes(user_id, post_id, created_at) VALUES(?,?,?)')
+        .run(adminUser.id, p1, now);
+    }
+  } catch (e) {
+    console.error('Notice ensuring profiles & community:', e.message);
+  }
+}
+
 export function seed(db) {
   // Always ensure default admin account exists and is synchronized
   ensureManmathAdmin(db);
@@ -172,6 +242,9 @@ export function seed(db) {
       "UPDATE users SET password_hash='scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6', role='admin', verified=1 WHERE lower(email)='manmath@fame.com'"
     ).run();
   } catch {}
+
+  // Ensure rich profile and community discussions are set up
+  ensureProfilesAndCommunity(db);
 
   // Also ensure published status and default video URLs are up-to-date even on existing databases
   db.prepare("UPDATE courses SET status='published' WHERE id IN ('blueprint', 'mastery') AND status='draft'").run();

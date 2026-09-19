@@ -27,7 +27,7 @@ const parse = (schema, value) => schema.parse(value);
 const fail = (message, status = 400) => {
   throw Object.assign(new Error(message), { status });
 };
-const safeUser = (u) =>
+const safeUser = (u, p = null) =>
   u
     ? {
       id: u.id,
@@ -35,6 +35,9 @@ const safeUser = (u) =>
       email: u.email,
       role: u.role,
       verified: !!u.verified,
+      handle: p?.handle || null,
+      avatar: p?.avatar || null,
+      headline: p?.headline || null,
     }
     : null;
 export function createApp(config, { database, gateway: providedGateway } = {}) {
@@ -46,6 +49,45 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     hasAccess(db, userId, courseId, config.paymentMode === 'demo' && !config.production);
   app.disable('x-powered-by');
   app.set('trust proxy', config.proxyHops);
+  const ensureUserProfile = (user) => {
+    let profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(user.id);
+    if (!profile) {
+      const rawHandle = (user.name || user.email.split('@')[0])
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '')
+        .slice(0, 24) || 'learner';
+      let handle = rawHandle;
+      let count = 1;
+      while (db.prepare('SELECT 1 FROM profiles WHERE handle=?').get(handle)) {
+        handle = `${rawHandle}${count++}`;
+      }
+      const isMentor = user.role === 'admin';
+      db.prepare(`
+        INSERT OR IGNORE INTO profiles(
+          user_id, handle, avatar, headline, bio, location,
+          business_stage, focus_area, website, linkedin, instagram, twitter, updated_at
+        ) VALUES(?, ?, ?, ?, ?, '', ?, '', '', '', '', '', ?)
+      `).run(
+        user.id,
+        handle,
+        isMentor ? '/images/manmath-biradar.jpg' : '',
+        isMentor ? 'Founder & Chief Mentor · FAME' : 'Food Entrepreneur & FAME Learner',
+        isMentor ? 'Guiding emerging food entrepreneurs in product validation, unit economics, and scalable sales channels.' : '',
+        isMentor ? 'Mentor & Enterprise Founder' : 'Idea Phase',
+        Date.now()
+      );
+      profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(user.id);
+    }
+    return profile;
+  };
+  const getUserBadges = (userId) => {
+    return db.prepare(`
+      SELECT DISTINCT c.id, c.title, c.eyebrow, c.level, c.accent, c.slug
+      FROM orders o
+      JOIN courses c ON o.course_id = c.id
+      WHERE o.user_id = ? AND o.status IN ('captured', 'demo') AND o.refund_amount < o.amount
+    `).all(userId);
+  };
   app.use(
     helmet({
       contentSecurityPolicy: config.production
@@ -125,7 +167,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   );
   app.use(
     '/api',
-    express.json({ limit: '128kb' }),
+    express.json({ limit: '1mb' }),
     sessionMiddleware(db, config),
     csrfGuard(config)
   );
@@ -133,8 +175,9 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     tokenLimit = rateLimit(db, 'email', 8, 15 * 60000);
   app.get('/api/session', rateLimit(db, 'session', 180, 15 * 60000), (req, res) => {
     const csrf = req.session?.csrf || createSession(db, config, req, res);
+    const p = req.user ? ensureUserProfile(req.user) : null;
     res.json({
-      user: req.user ? safeUser(req.user) : null,
+      user: req.user ? safeUser(req.user, p) : null,
       csrf,
       mode: config.paymentMode,
       development: !config.production,
@@ -185,16 +228,18 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         encoded,
         Date.now()
       );
+      ensureUserProfile(user);
     } catch (e) {
       if (String(e.message).includes('UNIQUE'))
         return res.status(409).json({ error: 'Unable to create this account. Try signing in.' });
       throw e;
     }
     verifyMail(user);
+    const profile = ensureUserProfile(user);
     const csrf = createSession(db, config, req, res, user.id);
     res
       .status(201)
-      .json({ user: safeUser(db.prepare('SELECT * FROM users WHERE id=?').get(user.id)), csrf });
+      .json({ user: safeUser(db.prepare('SELECT * FROM users WHERE id=?').get(user.id), profile), csrf });
   });
   const identifier = z.string().trim().toLowerCase().min(1).max(254);
   app.post('/api/auth/login', authLimit, async (req, res) => {
@@ -571,6 +616,282 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         res.status(404).json({ error: 'This media file has not been added yet.' });
     });
   });
+
+  // ─── USER PROFILE & SHAREABLE PUBLIC PROFILE ENDPOINTS ──────────────────────
+  app.get('/api/profile/me', requireUser, (req, res) => {
+    const profile = ensureUserProfile(req.user);
+    const badges = getUserBadges(req.user.id);
+    res.json({ profile, badges, user: safeUser(req.user, profile) });
+  });
+
+  const profileUpdateSchema = z.object({
+    name: z.string().trim().min(2).max(80).optional(),
+    handle: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9_]{2,30}$/, 'Handle must be 2-30 characters with lowercase letters, numbers, and underscores.'),
+    avatar: z.string().max(400000).optional().default(''),
+    headline: z.string().max(120).optional().default(''),
+    bio: z.string().max(2500).optional().default(''),
+    location: z.string().max(100).optional().default(''),
+    business_stage: z.string().max(60).optional().default('Idea Phase'),
+    focus_area: z.string().max(120).optional().default(''),
+    website: z.string().max(200).optional().default(''),
+    linkedin: z.string().max(200).optional().default(''),
+    instagram: z.string().max(200).optional().default(''),
+    twitter: z.string().max(200).optional().default(''),
+  });
+
+  app.put('/api/profile/me', requireUser, (req, res) => {
+    const d = parse(profileUpdateSchema, req.body);
+    const existing = db
+      .prepare('SELECT user_id FROM profiles WHERE lower(handle)=? AND user_id!=?')
+      .get(d.handle, req.user.id);
+    if (existing) fail('This handle is already taken. Please choose another username.', 409);
+
+    if (d.name && d.name !== req.user.name) {
+      db.prepare('UPDATE users SET name=? WHERE id=?').run(d.name, req.user.id);
+      req.user.name = d.name;
+    }
+
+    const now = Date.now();
+    db.prepare(`
+      INSERT INTO profiles(user_id, handle, avatar, headline, bio, location, business_stage, focus_area, website, linkedin, instagram, twitter, updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        handle=excluded.handle,
+        avatar=excluded.avatar,
+        headline=excluded.headline,
+        bio=excluded.bio,
+        location=excluded.location,
+        business_stage=excluded.business_stage,
+        focus_area=excluded.focus_area,
+        website=excluded.website,
+        linkedin=excluded.linkedin,
+        instagram=excluded.instagram,
+        twitter=excluded.twitter,
+        updated_at=excluded.updated_at
+    `).run(
+      req.user.id,
+      d.handle,
+      d.avatar || '',
+      d.headline || '',
+      d.bio || '',
+      d.location || '',
+      d.business_stage || 'Idea Phase',
+      d.focus_area || '',
+      d.website || '',
+      d.linkedin || '',
+      d.instagram || '',
+      d.twitter || '',
+      now
+    );
+
+    const updated = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
+    res.json({ ok: true, profile: updated, user: safeUser(req.user, updated) });
+  });
+
+  // Public shareable profile: /api/u/:handle
+  app.get('/api/u/:handle', (req, res) => {
+    const handle = req.params.handle.trim().toLowerCase();
+    const profile = db.prepare(`
+      SELECT p.*, u.name, u.role, u.created_at AS member_since
+      FROM profiles p
+      JOIN users u ON p.user_id = u.id
+      WHERE lower(p.handle) = ?
+    `).get(handle);
+
+    if (!profile) fail('Public profile not found.', 404);
+
+    const badges = getUserBadges(profile.user_id);
+    const recentPosts = db.prepare(`
+      SELECT id, title, category, is_resolved, created_at,
+             (SELECT count(*) FROM community_replies WHERE post_id=community_posts.id) AS reply_count,
+             (SELECT count(*) FROM community_upvotes WHERE post_id=community_posts.id) AS upvotes
+      FROM community_posts
+      WHERE user_id = ?
+      ORDER BY created_at DESC LIMIT 10
+    `).all(profile.user_id);
+
+    const repliesCount = db.prepare('SELECT count(*) AS n FROM community_replies WHERE user_id=?').get(profile.user_id).n;
+
+    res.json({
+      profile,
+      badges,
+      stats: {
+        postsCount: recentPosts.length,
+        repliesCount,
+      },
+      recentPosts,
+    });
+  });
+
+  // ─── COMMUNITY DOUBTS & DISCUSSIONS ENDPOINTS ──────────────────────────────
+  app.get('/api/community/posts', (req, res) => {
+    const { category, filter, search } = req.query;
+    let query = `
+      SELECT p.id, p.title, p.body, p.category, p.is_resolved, p.created_at, p.updated_at,
+             c.title AS course_title, c.eyebrow AS course_eyebrow, c.level AS course_level,
+             u.id AS author_id, u.name AS author_name, u.role AS author_role,
+             COALESCE(pr.handle, 'learner') AS author_handle,
+             COALESCE(pr.avatar, '') AS author_avatar,
+             COALESCE(pr.headline, '') AS author_headline,
+             (SELECT count(*) FROM community_replies r WHERE r.post_id = p.id) AS reply_count,
+             (SELECT count(*) FROM community_upvotes v WHERE v.post_id = p.id) AS upvote_count
+             ${req.user ? ', (SELECT count(*) FROM community_upvotes uv WHERE uv.post_id = p.id AND uv.user_id = ?) AS user_has_upvoted' : ', 0 AS user_has_upvoted'}
+      FROM community_posts p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN profiles pr ON p.user_id = pr.user_id
+      LEFT JOIN courses c ON p.course_id = c.id
+      WHERE 1=1
+    `;
+    const params = req.user ? [req.user.id] : [];
+
+    if (category && category !== 'All') {
+      query += ' AND p.category = ?';
+      params.push(category);
+    }
+    if (filter === 'resolved') {
+      query += ' AND p.is_resolved = 1';
+    } else if (filter === 'open') {
+      query += ' AND p.is_resolved = 0';
+    }
+    if (search && search.trim()) {
+      query += ' AND (p.title LIKE ? OR p.body LIKE ?)';
+      params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+    }
+
+    query += ' ORDER BY p.created_at DESC LIMIT 50';
+    const posts = db.prepare(query).all(...params);
+    res.json({ posts });
+  });
+
+  app.get('/api/community/posts/:id', (req, res) => {
+    const post = db.prepare(`
+      SELECT p.id, p.title, p.body, p.category, p.is_resolved, p.created_at, p.updated_at,
+             c.id AS course_id, c.title AS course_title, c.eyebrow AS course_eyebrow, c.level AS course_level,
+             u.id AS author_id, u.name AS author_name, u.role AS author_role,
+             COALESCE(pr.handle, 'learner') AS author_handle,
+             COALESCE(pr.avatar, '') AS author_avatar,
+             COALESCE(pr.headline, '') AS author_headline,
+             (SELECT count(*) FROM community_upvotes v WHERE v.post_id = p.id) AS upvote_count
+             ${req.user ? ', (SELECT count(*) FROM community_upvotes uv WHERE uv.post_id = p.id AND uv.user_id = ?) AS user_has_upvoted' : ', 0 AS user_has_upvoted'}
+      FROM community_posts p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN profiles pr ON p.user_id = pr.user_id
+      LEFT JOIN courses c ON p.course_id = c.id
+      WHERE p.id = ?
+    `).get(...(req.user ? [req.user.id, req.params.id] : [req.params.id]));
+
+    if (!post) fail('Discussion post not found.', 404);
+
+    const replies = db.prepare(`
+      SELECT r.id, r.body, r.is_solution, r.created_at,
+             u.id AS author_id, u.name AS author_name, u.role AS author_role,
+             COALESCE(pr.handle, 'learner') AS author_handle,
+             COALESCE(pr.avatar, '') AS author_avatar,
+             COALESCE(pr.headline, '') AS author_headline
+      FROM community_replies r
+      JOIN users u ON r.user_id = u.id
+      LEFT JOIN profiles pr ON r.user_id = pr.user_id
+      WHERE r.post_id = ?
+      ORDER BY r.is_solution DESC, r.created_at ASC
+    `).all(req.params.id);
+
+    res.json({ post, replies });
+  });
+
+  app.post('/api/community/posts', requireUser, (req, res) => {
+    const d = parse(
+      z.object({
+        title: z.string().trim().min(5, 'Title must be at least 5 characters.').max(200),
+        body: z.string().trim().min(10, 'Please write at least 10 characters explaining your doubt.').max(20000),
+        category: z.string().trim().min(2).max(50).default('General'),
+        courseId: z.string().max(128).optional().nullable(),
+      }),
+      req.body
+    );
+
+    const id = 'post-' + randomUUID();
+    const now = Date.now();
+    db.prepare(`
+      INSERT INTO community_posts(id, user_id, course_id, title, body, category, is_resolved, created_at, updated_at)
+      VALUES(?,?,?,?,?,?,0,?,?)
+    `).run(id, req.user.id, d.courseId || null, d.title, d.body, d.category, now, now);
+
+    res.status(201).json({ id, ok: true });
+  });
+
+  app.post('/api/community/posts/:id/replies', requireUser, (req, res) => {
+    const post = db.prepare('SELECT id FROM community_posts WHERE id=?').get(req.params.id);
+    if (!post) fail('Discussion post not found.', 404);
+
+    const d = parse(
+      z.object({
+        body: z.string().trim().min(2, 'Reply must have at least 2 characters.').max(10000),
+      }),
+      req.body
+    );
+
+    const replyId = 'rep-' + randomUUID();
+    const now = Date.now();
+    db.prepare(`
+      INSERT INTO community_replies(id, post_id, user_id, body, is_solution, created_at)
+      VALUES(?,?,?,?,0,?)
+    `).run(replyId, req.params.id, req.user.id, d.body, now);
+
+    db.prepare('UPDATE community_posts SET updated_at=? WHERE id=?').run(now, req.params.id);
+    res.status(201).json({ replyId, ok: true });
+  });
+
+  app.post('/api/community/posts/:id/upvote', requireUser, (req, res) => {
+    const post = db.prepare('SELECT id FROM community_posts WHERE id=?').get(req.params.id);
+    if (!post) fail('Post not found.', 404);
+
+    const existing = db
+      .prepare('SELECT 1 FROM community_upvotes WHERE user_id=? AND post_id=?')
+      .get(req.user.id, req.params.id);
+    let upvoted = false;
+    if (existing) {
+      db.prepare('DELETE FROM community_upvotes WHERE user_id=? AND post_id=?').run(req.user.id, req.params.id);
+    } else {
+      db.prepare('INSERT INTO community_upvotes(user_id, post_id, created_at) VALUES(?,?,?)').run(
+        req.user.id,
+        req.params.id,
+        Date.now()
+      );
+      upvoted = true;
+    }
+    const count = db.prepare('SELECT count(*) AS n FROM community_upvotes WHERE post_id=?').get(req.params.id).n;
+    res.json({ ok: true, upvoted, count });
+  });
+
+  app.post('/api/community/replies/:id/solution', requireUser, (req, res) => {
+    const reply = db
+      .prepare(`
+      SELECT r.id, r.post_id, r.is_solution, p.user_id AS post_author_id
+      FROM community_replies r
+      JOIN community_posts p ON r.post_id = p.id
+      WHERE r.id = ?
+    `)
+      .get(req.params.id);
+
+    if (!reply) fail('Reply not found.', 404);
+    if (reply.post_author_id !== req.user.id && req.user.role !== 'admin') {
+      fail('Only the doubt author or mentor can mark an answer as solution.', 403);
+    }
+
+    const nextState = reply.is_solution ? 0 : 1;
+    if (nextState === 1) {
+      db.prepare('UPDATE community_replies SET is_solution=0 WHERE post_id=?').run(reply.post_id);
+    }
+    db.prepare('UPDATE community_replies SET is_solution=? WHERE id=?').run(nextState, req.params.id);
+    db.prepare('UPDATE community_posts SET is_resolved=? WHERE id=?').run(nextState, reply.post_id);
+
+    res.json({ ok: true, is_solution: !!nextState });
+  });
+
   app.use('/api/admin', requireUser, requireAdmin);
   app.get('/api/admin/overview', (_req, res) => {
     const stats = db
