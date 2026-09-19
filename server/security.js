@@ -90,8 +90,31 @@ export function requireAdmin(req, res, next) {
 export function csrfGuard(config) {
   return (req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-    if (req.headers.origin !== config.origin)
-      return res.status(403).json({ error: 'This request did not come from this website.' });
+    const reqOrigin = req.headers.origin;
+    if (reqOrigin) {
+      let isAllowed = reqOrigin === config.origin;
+      if (!isAllowed) {
+        try {
+          const originUrl = new URL(reqOrigin);
+          const hostHeader = (req.get('x-forwarded-host') || req.get('host') || '').toLowerCase();
+          const hostNameOnly = hostHeader.split(':')[0];
+          const originHost = originUrl.hostname.toLowerCase();
+
+          // Match exact host header or hostname (e.g. EC2 public IP or domain)
+          if (hostHeader && (originUrl.host.toLowerCase() === hostHeader || originHost === hostNameOnly)) {
+            isAllowed = true;
+          }
+          // Match config.origin hostname if port differs or loopback
+          if (new URL(config.origin).hostname.toLowerCase() === originHost) {
+            isAllowed = true;
+          }
+        } catch {}
+      }
+
+      if (!isAllowed) {
+        return res.status(403).json({ error: 'This request did not come from this website.' });
+      }
+    }
     if (!req.session || !safeEqual(req.headers['x-csrf-token'], req.session.csrf))
       return res
         .status(403)

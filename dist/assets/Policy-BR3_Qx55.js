@@ -1,4 +1,4 @@
-import{j as e,a as l}from"./index-ltS7_cxY.js";import{P as m}from"./PublicLayout-xJRR-2bw.js";import{u as c}from"./useLoad-DxCg28P4.js";import{M as u}from"./mail-CfFn4xeN.js";import"./x-DB9TQWWe.js";const d={terms:"Terms of use",privacy:"Privacy policy",refunds:"Refund policy",contact:"Contact & support"},p={terms:`Welcome to FAME (Future Ready Agro Food Entrepreneurship Community). By accessing our programmes, masterclasses, and resources, you agree to these Terms of Use.
+import{j as e,a as l}from"./index-rypFPFVr.js";import{P as m}from"./PublicLayout-pB5OGoG1.js";import{u as c}from"./useLoad-UnQVPQdh.js";import{M as u}from"./mail-C63W3f7I.js";import"./x-DXgDE0vm.js";const d={terms:"Terms of use",privacy:"Privacy policy",refunds:"Refund policy",contact:"Contact & support"},p={terms:`Welcome to FAME (Future Ready Agro Food Entrepreneurship Community). By accessing our programmes, masterclasses, and resources, you agree to these Terms of Use.
 
 All learning materials, templates, video lessons, and frameworks are provided for educational and business development purposes. Enrolled participants receive a personal, non-transferable license to access the content.
 

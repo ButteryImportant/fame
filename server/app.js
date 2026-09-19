@@ -58,6 +58,8 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
                 'https://*.razorpay.in',
                 'https://player.vimeo.com',
                 'https://www.youtube-nocookie.com',
+                'https://www.youtube.com',
+                'https://youtube.com',
               ],
               mediaSrc: ["'self'", 'https:'],
               objectSrc: ["'none'"],
@@ -647,12 +649,20 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   );
   const video = z
     .string()
+    .trim()
     .max(2000)
+    .transform((val) => {
+      if (!val) return '';
+      if (/^(www\.|youtu\.be|youtube\.com|vimeo\.com)/i.test(val)) {
+        return `https://${val}`;
+      }
+      return val;
+    })
     .refine(
       (value) =>
         !value ||
         /^media:[a-zA-Z0-9_-]+\.(mp4|webm|mp3|pdf)$/.test(value) ||
-        (/^https:\/\//.test(value) &&
+        (/^https?:\/\//i.test(value) &&
           (() => {
             try {
               return !new URL(value).username && !new URL(value).password;
@@ -660,7 +670,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
               return false;
             }
           })()),
-      'Use an HTTPS video URL or media:filename.mp4.'
+      'Use a valid video URL (YouTube, Vimeo, or HTTPS link) or media:filename.mp4.'
     );
   const lessonSchema = z.object({
     module_title: z.string().trim().min(1).max(100),
@@ -711,6 +721,26 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       +d.is_preview,
       req.params.id
     );
+    res.json({ ok: true });
+  });
+  app.delete('/api/admin/lessons/:id', (req, res) => {
+    const lesson = db.prepare('SELECT * FROM lessons WHERE id=?').get(req.params.id);
+    if (!lesson) fail('Lesson not found.', 404);
+    db.prepare('DELETE FROM lessons WHERE id=?').run(req.params.id);
+    db.prepare('DELETE FROM progress WHERE lesson_id=?').run(req.params.id);
+    res.json({ ok: true });
+  });
+  app.delete('/api/admin/courses/:id', (req, res) => {
+    const course = db.prepare('SELECT * FROM courses WHERE id=?').get(req.params.id);
+    if (!course) fail('Course not found.', 404);
+    const paid = db
+      .prepare("SELECT 1 FROM orders WHERE course_id=? AND status='captured'")
+      .get(req.params.id);
+    if (paid) fail('Cannot delete a programme with active paid orders.', 400);
+    transaction(db, () => {
+      db.prepare('DELETE FROM lessons WHERE course_id=?').run(req.params.id);
+      db.prepare('DELETE FROM courses WHERE id=?').run(req.params.id);
+    });
     res.json({ ok: true });
   });
   app.put('/api/admin/settings', (req, res) => {
