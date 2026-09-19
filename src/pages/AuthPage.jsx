@@ -54,10 +54,10 @@ export function AuthPage({ mode = 'login' }) {
           method: 'POST',
           body:
             mode === 'register'
-              ? { name: f.get('name'), email: f.get('email'), password: f.get('password') }
+              ? { name: f.get('name')?.toString().trim(), email: f.get('email')?.toString().trim(), password: f.get('password') }
               : mode === 'forgot'
-                ? { email: f.get('email') }
-                : { email: f.get('email'), password: f.get('password') },
+                ? { email: f.get('email')?.toString().trim() }
+                : { email: f.get('email')?.toString().trim(), password: f.get('password') },
         });
       }
       if (['login', 'register'].includes(mode)) {
