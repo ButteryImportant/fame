@@ -19,6 +19,7 @@ import {
 } from './security.js';
 import { createGateway, validSignature, applyCaptured } from './payments.js';
 import { createMailer } from './mail.js';
+import { ensureManmathAdmin } from './seed.js';
 const email = z.string().trim().toLowerCase().email().max(254);
 const password = z.string().min(12, 'Use at least 12 characters.').max(128);
 const name = z.string().trim().min(2).max(80);
@@ -26,13 +27,16 @@ const parse = (schema, value) => schema.parse(value);
 const fail = (message, status = 400) => {
   throw Object.assign(new Error(message), { status });
 };
-const safeUser = (u) => ({
-  id: u.id,
-  name: u.name,
-  email: u.email,
-  role: u.role,
-  verified: !!u.verified,
-});
+const safeUser = (u) =>
+  u
+    ? {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        verified: !!u.verified,
+      }
+    : null;
 export function createApp(config, { database, gateway: providedGateway } = {}) {
   const db = database || openDatabase(config.dbPath),
     gateway = providedGateway || createGateway(config),
@@ -208,24 +212,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       .get(idClean, idClean);
 
     if (isManmathAdmin) {
-      const adminHash =
-        'scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6';
-      if (!user) {
-        user = db
-          .prepare("SELECT * FROM users WHERE id='admin-manmath' OR lower(email)='manmath'")
-          .get();
-      }
-      if (!user) {
-        db.prepare(
-          "INSERT INTO users(id,name,email,password_hash,role,verified,created_at) VALUES('admin-manmath','Manmath Biradar','manmath',?,'admin',1,?)"
-        ).run(adminHash, Date.now());
-        user = db.prepare("SELECT * FROM users WHERE id='admin-manmath'").get();
-      } else {
-        db.prepare(
-          "UPDATE users SET email='manmath', name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
-        ).run(adminHash, user.id);
-        user = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
-      }
+      user = ensureManmathAdmin(db);
     } else if (!user) {
       user = db
         .prepare("SELECT * FROM users WHERE email='manmath' OR email='manmath@fame.com' OR id='admin-manmath' OR name='manmath' COLLATE NOCASE")
@@ -814,7 +801,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         : status < 500
           ? err.message
           : 'Something went wrong. Please try again.';
-    if (status >= 500) console.error('Request failed:', err.name);
+    if (status >= 500) console.error('Request failed:', err);
     res.status(status).json({ error });
   });
   return { app, db, mailer };

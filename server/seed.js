@@ -133,26 +133,73 @@ const courses = [
     ],
   },
 ];
-export function seed(db) {
-  // Always ensure default admin account exists and is synchronized with password 'manmath'
+export function ensureManmathAdmin(db) {
   const adminHash =
     'scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6';
 
-  const existingAdmin = db
-    .prepare("SELECT id FROM users WHERE lower(email) = 'manmath' OR id = 'admin-manmath'")
-    .get();
-  if (existingAdmin) {
+  try {
+    // 1. First priority: find user by email 'manmath'
+    const byEmail = db.prepare("SELECT * FROM users WHERE lower(email) = 'manmath'").get();
+    if (byEmail) {
+      db.prepare(
+        "UPDATE users SET name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
+      ).run(adminHash, byEmail.id);
+      return db.prepare('SELECT * FROM users WHERE id=?').get(byEmail.id);
+    }
+
+    // 2. Second priority: find user by id 'admin-manmath'
+    const byId = db.prepare("SELECT * FROM users WHERE id = 'admin-manmath'").get();
+    if (byId) {
+      db.prepare(
+        "UPDATE users SET email='manmath', name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
+      ).run(adminHash, byId.id);
+      return db.prepare('SELECT * FROM users WHERE id=?').get(byId.id);
+    }
+
+    // 3. Third priority: check by name
+    const byName = db
+      .prepare("SELECT * FROM users WHERE lower(name) = 'manmath' OR lower(name) = 'manmath biradar'")
+      .get();
+    if (byName) {
+      db.prepare(
+        "UPDATE users SET email='manmath', name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
+      ).run(adminHash, byName.id);
+      return db.prepare('SELECT * FROM users WHERE id=?').get(byName.id);
+    }
+
+    // 4. Create new admin-manmath
     db.prepare(
-      "UPDATE users SET email='manmath', name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
-    ).run(adminHash, existingAdmin.id);
-  } else {
-    db.prepare(
-      "INSERT INTO users(id,name,email,password_hash,role,verified,created_at) VALUES(?,'Manmath Biradar','manmath',?,'admin',1,?)"
-    ).run('admin-manmath', adminHash, Date.now());
+      "INSERT INTO users(id,name,email,password_hash,role,verified,created_at) VALUES('admin-manmath','Manmath Biradar','manmath',?,'admin',1,?)"
+    ).run(adminHash, Date.now());
+    return db.prepare("SELECT * FROM users WHERE id='admin-manmath'").get();
+  } catch (err) {
+    console.error('ensureManmathAdmin notice:', err.message);
+    const fallback = db
+      .prepare(
+        "SELECT * FROM users WHERE lower(email)='manmath' OR id='admin-manmath' OR lower(name)='manmath'"
+      )
+      .get();
+    if (fallback) {
+      try {
+        db.prepare("UPDATE users SET password_hash=?, role='admin', verified=1 WHERE id=?").run(
+          adminHash,
+          fallback.id
+        );
+      } catch {}
+      return db.prepare('SELECT * FROM users WHERE id=?').get(fallback.id);
+    }
+    return null;
   }
-  db.prepare(
-    "UPDATE users SET password_hash=?, role='admin', verified=1 WHERE lower(email)='manmath@fame.com'"
-  ).run(adminHash);
+}
+
+export function seed(db) {
+  // Always ensure default admin account exists and is synchronized
+  ensureManmathAdmin(db);
+  try {
+    db.prepare(
+      "UPDATE users SET password_hash='scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6', role='admin', verified=1 WHERE lower(email)='manmath@fame.com'"
+    ).run();
+  } catch {}
 
   // Also ensure published status and default video URLs are up-to-date even on existing databases
   db.prepare("UPDATE courses SET status='published' WHERE id IN ('blueprint', 'mastery') AND status='draft'").run();
