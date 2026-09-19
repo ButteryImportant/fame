@@ -61,8 +61,14 @@ export function AuthPage({ mode = 'login' }) {
         });
       }
       if (['login', 'register'].includes(mode)) {
-        await refresh();
-        navigate(next, { replace: true });
+        const session = await refresh();
+        const dest =
+          requested && /^\/(checkout|courses|admin)\/[a-z0-9-]+$/.test(requested)
+            ? requested
+            : session?.user?.role === 'admin'
+              ? '/admin'
+              : next;
+        navigate(dest, { replace: true });
       } else {
         setMessage(result.message);
         await refresh();
@@ -136,14 +142,14 @@ export function AuthPage({ mode = 'login' }) {
               )}
               {['login', 'register', 'forgot'].includes(mode) && (
                 <label>
-                  Email address
+                  {mode === 'login' ? 'Email address or username' : 'Email address'}
                   <input
                     name="email"
-                    type="email"
-                    autoComplete="email"
+                    type={mode === 'login' ? 'text' : 'email'}
+                    autoComplete={mode === 'login' ? 'username' : 'email'}
                     required
                     maxLength={254}
-                    placeholder="you@example.com"
+                    placeholder={mode === 'login' ? 'you@example.com or manmath' : 'you@example.com'}
                   />
                 </label>
               )}

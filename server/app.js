@@ -190,9 +190,17 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       .status(201)
       .json({ user: safeUser(db.prepare('SELECT * FROM users WHERE id=?').get(user.id)), csrf });
   });
+  const identifier = z.string().trim().toLowerCase().min(1).max(254);
   app.post('/api/auth/login', authLimit, async (req, res) => {
-    const data = parse(z.object({ email, password: z.string().max(128) }), req.body);
-    const user = db.prepare('SELECT * FROM users WHERE email=?').get(data.email);
+    const data = parse(z.object({ email: identifier, password: z.string().max(128) }), req.body);
+    let user = db
+      .prepare('SELECT * FROM users WHERE email=? OR name=? COLLATE NOCASE')
+      .get(data.email, data.email);
+    if (!user && (data.email === 'manmath' || data.email === 'manmath@fame.com')) {
+      user = db
+        .prepare("SELECT * FROM users WHERE email='manmath' OR email='manmath@fame.com' OR name='manmath' COLLATE NOCASE")
+        .get();
+    }
     const valid = await verifyPassword(data.password, user?.password_hash || dummyHash);
     if (!valid || !user) fail('Email or password is incorrect.', 401);
     const csrf = createSession(db, config, req, res, user.id);
@@ -467,9 +475,15 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   app.get('/api/dashboard', requireUser, (req, res) => {
     const courses = db
       .prepare(
-        "SELECT DISTINCT c.* FROM courses c JOIN orders o ON o.course_id=c.id WHERE o.user_id=? AND (o.status='captured' OR (o.status='demo' AND ?=1)) AND o.refund_amount<o.amount ORDER BY c.position"
+        req.user.role === 'admin'
+          ? 'SELECT * FROM courses ORDER BY position'
+          : "SELECT DISTINCT c.* FROM courses c JOIN orders o ON o.course_id=c.id WHERE o.user_id=? AND (o.status='captured' OR (o.status='demo' AND ?=1)) AND o.refund_amount<o.amount ORDER BY c.position"
       )
-      .all(req.user.id, config.paymentMode === 'demo' && !config.production ? 1 : 0)
+      .all(
+        ...(req.user.role === 'admin'
+          ? []
+          : [req.user.id, config.paymentMode === 'demo' && !config.production ? 1 : 0])
+      )
       .map((c) => {
         const p = publicCourse(c);
         const completed = db
@@ -504,7 +518,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     const data = parse(z.object({ completed: z.boolean() }), req.body);
     const l = db.prepare('SELECT * FROM lessons WHERE id=?').get(req.params.lessonId);
     if (!l) fail('Lesson not found.', 404);
-    if (!access(db, req.user.id, l.course_id)) fail('Course access is required.', 403);
+    if (req.user.role !== 'admin' && !access(db, req.user.id, l.course_id)) fail('Course access is required.', 403);
     db.prepare(
       'INSERT INTO progress VALUES(?,?,?,?) ON CONFLICT(user_id,lesson_id) DO UPDATE SET completed=excluded.completed,updated_at=excluded.updated_at'
     ).run(req.user.id, l.id, data.completed ? 1 : 0, Date.now());

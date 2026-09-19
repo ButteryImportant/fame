@@ -21,9 +21,16 @@ export function Header() {
         </nav>
         <div className="nav-actions">
           {user ? (
-            <Link className="button small" to="/dashboard">
-              My learning <Arrow />
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {user.role === 'admin' && (
+                <Link className="button small outline" to="/admin">
+                  Owner dashboard
+                </Link>
+              )}
+              <Link className="button small" to="/dashboard">
+                My learning <Arrow />
+              </Link>
+            </div>
           ) : (
             <>
               <Link className="sign-in" to="/login">
