@@ -181,12 +181,6 @@ export function Checkout() {
             <strong>{money(c.price)}</strong>
           </div>
           <p className="muted">One-time payment. The displayed amount is the final checkout total.</p>
-          {mode === 'demo' && (
-            <Notice type="info">
-              Preview checkout. No money will be charged. This enrolment lets you test the learning
-              experience.
-            </Notice>
-          )}
           {!user.verified && mode !== 'demo' && (
             <Notice type="info">
               Please <Link to="/account">verify your email</Link> before paying.
@@ -214,11 +208,7 @@ export function Checkout() {
             }
             onClick={pay}
           >
-            {busy
-              ? 'Opening checkout…'
-              : mode === 'demo'
-                ? 'Try demo enrolment'
-                : `Pay ${money(c.price)}`}
+            {busy ? 'Processing enrolment…' : `Pay ${money(c.price)}`}
             <LockKeyhole size={18} />
           </button>
           {order && (

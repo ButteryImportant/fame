@@ -138,3 +138,73 @@
 .main-nav a,.student-sidebar nav a,.lesson-nav,.curriculum-lesson,.checkbox-label,label,.owner-tabs button,.lesson-editor-list button{font-size:.875rem}table{font-size:.875rem}
 
 .brand{flex-shrink:0}.brand-caption{white-space:nowrap}@media(max-width:600px){.nav{gap:10px}.nav-actions .button{white-space:nowrap}.nav-actions .button svg{display:none}}
+
+/* MEET YOUR MENTOR PROFILE PAGE */
+.mentor-profile-page{background:#fff}
+.mentor-hero-wrapper{background:linear-gradient(135deg,#06221a 0%,#0c382b 50%,#071e18 100%);color:#fff;padding:68px 0 75px;border-bottom:1px solid #164638}
+.mentor-hero-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:60px;align-items:center}
+.mentor-badge{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;font-weight:750;letter-spacing:.09em;color:#c5ee8b;background:rgba(197,238,139,.14);border:1px solid rgba(197,238,139,.22);padding:6px 14px;border-radius:20px;margin-bottom:22px}
+.mentor-title{font-size:clamp(2.8rem,4.4vw,4rem);line-height:1.1;color:#fff;letter-spacing:-.035em}
+.mentor-subtitle{font-family:Georgia,serif;font-style:italic;color:#c5ee8b;font-weight:400;display:inline-block;margin-top:6px}
+.mentor-lead-copy{color:#b6d4c5;font-size:1.05rem;line-height:1.8;margin:22px 0 28px;max-width:560px}
+.mentor-quick-tags{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:32px}
+.quick-tag{display:inline-flex;align-items:center;gap:7px;font-size:.78rem;color:#d8ece2;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);padding:7px 13px;border-radius:7px}
+.quick-tag svg{color:#c5ee8b}
+.mentor-cta-row{display:flex;gap:22px;align-items:center}
+.mentor-cta-row .text-link{color:#c5ee8b}
+.mentor-portrait-frame{position:relative;border-radius:20px;overflow:hidden;box-shadow:0 24px 55px rgba(0,0,0,.35);border:1px solid rgba(197,238,139,.25);background:#071a15}
+.mentor-portrait-img{width:100%;height:520px;object-fit:cover;object-position:50% 25%;display:block}
+.mentor-portrait-overlay{position:absolute;bottom:0;left:0;right:0;padding:85px 26px 24px;background:linear-gradient(transparent,rgba(6,26,22,.96));color:#fff}
+.portrait-pill{font-size:.62rem;letter-spacing:.12em;font-weight:800;color:#c5ee8b;display:block;margin-bottom:6px}
+.mentor-portrait-overlay h3{font-size:1.35rem;margin:0 0 5px;color:#fff}
+.mentor-portrait-overlay p{font-size:.78rem;color:#b8d6c8;margin:0}
+.mentor-metrics-bar{margin-top:-32px;position:relative;z-index:10}
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:26px 30px;box-shadow:0 12px 32px rgba(18,89,69,.08)}
+.metric-item strong{display:block;font-size:2.1rem;font-family:Manrope,sans-serif;color:var(--green);letter-spacing:-.04em}
+.metric-item span{font-size:.8rem;color:#5f7268;line-height:1.5;margin-top:5px;display:block;font-weight:500}
+.mentor-story-section{padding-top:75px}
+.story-layout{display:grid;grid-template-columns:1fr 1.15fr;gap:70px;align-items:start}
+.mentor-quote-card{background:#f3f8f5;border-left:4px solid var(--green);padding:24px 26px;border-radius:0 12px 12px 0;margin-top:30px}
+.mentor-quote-card blockquote{margin:0;font-family:Georgia,serif;font-style:italic;font-size:1.15rem;line-height:1.65;color:var(--ink)}
+.mentor-quote-card cite{display:block;margin-top:14px;font-size:.82rem;font-weight:700;font-style:normal;color:var(--green)}
+.story-paragraph{font-size:1.02rem;line-height:1.88;color:#495e54;margin-bottom:20px}
+.story-paragraph.highlight{font-size:1.14rem;color:var(--ink);font-weight:550;line-height:1.75}
+.story-insight-box{background:#fff8f5;border:1px solid #f4ded7;border-radius:12px;padding:24px 28px;margin:26px 0}
+.story-insight-box h4{color:#883522;font-size:.98rem;margin-bottom:12px}
+.story-insight-box ul{padding-left:20px;margin:0}
+.story-insight-box li{font-size:.88rem;line-height:1.75;color:#5a4038;margin-bottom:10px}
+.mentor-tenets-section{background:#fafcfb;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.section-head-center{text-align:center;max-width:680px;margin:0 auto 50px}
+.head-desc{font-size:.95rem;color:var(--muted);margin-top:14px;line-height:1.7}
+.tenets-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+.tenet-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:34px 30px;position:relative;transition:transform .2s,box-shadow .2s}
+.tenet-card:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(18,89,69,.08)}
+.tenet-num{position:absolute;top:24px;right:28px;font-family:Manrope,sans-serif;font-size:1.8rem;font-weight:800;color:#d6e4dc}
+.tenet-icon-wrap{width:48px;height:48px;border-radius:12px;background:#ebf5ee;color:var(--green);display:grid;place-items:center;margin-bottom:20px}
+.tenet-card h3{font-size:1.28rem;margin-bottom:6px}
+.tenet-subtitle{font-size:.75rem;font-weight:750;color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px}
+.tenet-card p:last-child{font-size:.92rem;line-height:1.75;color:#5d7066;margin:0}
+.domains-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin-top:36px}
+.domain-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:28px;display:flex;flex-direction:column;gap:10px}
+.domain-icon{color:var(--green)}
+.domain-card h4{font-size:1.12rem;margin:4px 0 2px}
+.domain-card p{font-size:.88rem;line-height:1.7;color:#62756b;margin:0}
+.mentor-letter-card{background:#fdfdfc;border:1px solid #dbe6df;border-radius:16px;padding:48px 56px;box-shadow:0 12px 36px rgba(18,89,69,.05)}
+.letter-header h3{font-size:1.45rem;margin-top:8px}
+.letter-body p{font-size:1.02rem;line-height:1.88;color:#495e54;margin-bottom:18px}
+.letter-footer{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);margin-top:34px;padding-top:26px;flex-wrap:wrap;gap:20px}
+.founder-signature-block strong{display:block;font-family:Georgia,serif;font-size:1.4rem;font-weight:700;font-style:italic;color:var(--green)}
+.founder-signature-block span{display:block;font-size:.76rem;color:var(--muted);margin-top:2px}
+.mentor-final-cta{margin-top:20px;margin-bottom:80px}
+@media(max-width:920px){
+  .mentor-hero-grid,.story-layout,.tenets-grid,.domains-grid{grid-template-columns:1fr;gap:35px}
+  .metrics-grid{grid-template-columns:repeat(2,1fr);gap:16px}
+  .mentor-portrait-img{height:420px}
+  .mentor-letter-card{padding:36px 30px}
+}
+@media(max-width:600px){
+  .mentor-hero-wrapper{padding:40px 0}
+  .metrics-grid{grid-template-columns:1fr;gap:12px}
+  .mentor-letter-card{padding:28px 20px}
+  .mentor-metrics-bar{margin-top:-16px}
+}

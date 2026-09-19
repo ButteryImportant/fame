@@ -133,12 +133,6 @@ function App() {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      {session.mode === 'demo' && (
-        <div className="demo-banner">
-          PREVIEW MODE{' '}
-          <span>Explore the platform. Payments are simulated; no money is charged.</span>
-        </div>
-      )}
       {sessionError ? (
         <div className="wrap section">
           <div className="notice error" role="alert">

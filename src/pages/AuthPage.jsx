@@ -142,14 +142,14 @@ export function AuthPage({ mode = 'login' }) {
               )}
               {['login', 'register', 'forgot'].includes(mode) && (
                 <label>
-                  {mode === 'login' ? 'Email address or username' : 'Email address'}
+                  Email address
                   <input
                     name="email"
                     type={mode === 'login' ? 'text' : 'email'}
                     autoComplete={mode === 'login' ? 'username' : 'email'}
                     required
                     maxLength={254}
-                    placeholder={mode === 'login' ? 'you@example.com or manmath' : 'you@example.com'}
+                    placeholder="you@example.com"
                   />
                 </label>
               )}
