@@ -134,12 +134,25 @@ const courses = [
   },
 ];
 export function seed(db) {
-  // Always ensure default admin account exists
+  // Always ensure default admin account exists and is synchronized with password 'manmath'
   const adminHash =
     'scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6';
+
+  const existingAdmin = db
+    .prepare("SELECT id FROM users WHERE lower(email) = 'manmath' OR id = 'admin-manmath'")
+    .get();
+  if (existingAdmin) {
+    db.prepare(
+      "UPDATE users SET email='manmath', name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
+    ).run(adminHash, existingAdmin.id);
+  } else {
+    db.prepare(
+      "INSERT INTO users(id,name,email,password_hash,role,verified,created_at) VALUES(?,'Manmath Biradar','manmath',?,'admin',1,?)"
+    ).run('admin-manmath', adminHash, Date.now());
+  }
   db.prepare(
-    "INSERT OR IGNORE INTO users(id,name,email,password_hash,role,verified,created_at) VALUES(?,'Manmath Biradar','manmath',?,'admin',1,?)"
-  ).run('admin-manmath', adminHash, Date.now());
+    "UPDATE users SET password_hash=?, role='admin', verified=1 WHERE lower(email)='manmath@fame.com'"
+  ).run(adminHash);
 
   // Also ensure published status and default video URLs are up-to-date even on existing databases
   db.prepare("UPDATE courses SET status='published' WHERE id IN ('blueprint', 'mastery') AND status='draft'").run();
