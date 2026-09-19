@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Brand, Arrow } from './shared';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Header() {
   const { user } = useAuth();
@@ -41,6 +42,7 @@ export function Header() {
               </Link>
             </>
           )}
+          <ThemeToggle />
           <button
             className="icon-button mobile-menu"
             aria-label={open ? 'Close menu' : 'Open menu'}

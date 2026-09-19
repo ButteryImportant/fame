@@ -7,6 +7,7 @@ import {
   Video,
   BookOpen,
   Users,
+  UserPlus,
   CreditCard,
   ArrowLeft,
   CheckCircle2,
@@ -65,12 +66,72 @@ export function Admin() {
   const [lessons, setLessons] = useState([]);
   const [lesson, setLesson] = useState(null);
   const [activeCourseTab, setActiveCourseTab] = useState('lessons'); // 'lessons' | 'details'
+  const [enrolments, setEnrolments] = useState([]);
+  const [grantEmail, setGrantEmail] = useState('');
+  const [grantCourseId, setGrantCourseId] = useState('');
+  const [grantBusy, setGrantBusy] = useState(false);
+  const [accessSearch, setAccessSearch] = useState('');
+
+  async function loadEnrolments() {
+    try {
+      const res = await api('/admin/enrolments');
+      setEnrolments(res.enrolments || []);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
 
   async function refresh() {
     setError('');
     const d = await api('/admin/overview');
     setData(d);
+    if (d?.courses?.length && !grantCourseId) {
+      setGrantCourseId(d.courses[0].id);
+    }
+    loadEnrolments().catch(() => {});
     return d;
+  }
+
+  async function handleGrantAccess(e) {
+    e.preventDefault();
+    if (!grantEmail.trim() || !grantCourseId) return;
+    setGrantBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await api('/admin/enrol', {
+        method: 'POST',
+        body: { email: grantEmail.trim(), courseId: grantCourseId },
+      });
+      setMessage(res.message);
+      setGrantEmail('');
+      await loadEnrolments();
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGrantBusy(false);
+    }
+  }
+
+  async function handleRevokeAccess(orderId, email, courseTitle) {
+    if (!window.confirm(`Revoke full course access for "${email}" to "${courseTitle}"?`)) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await api('/admin/revoke-access', {
+        method: 'POST',
+        body: { orderId },
+      });
+      setMessage(res.message);
+      await loadEnrolments();
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -179,6 +240,18 @@ export function Admin() {
             Programmes &amp; Overview
           </button>
           <button
+            className={view === 'access' ? 'active' : ''}
+            onClick={() => {
+              setView('access');
+              setMessage('');
+              setError('');
+              loadEnrolments();
+            }}
+          >
+            <Users size={16} />
+            Learner Course Access ({enrolments.length})
+          </button>
+          <button
             className={view === 'settings' ? 'active' : ''}
             onClick={() => {
               setView('settings');
@@ -248,6 +321,18 @@ export function Admin() {
                     <Play size={14} />
                     Manage Lessons &amp; Content
                   </button>
+                  <button
+                    type="button"
+                    className="button small outline full admin-preview-btn"
+                    onClick={() => {
+                      setGrantCourseId(c.id);
+                      setView('access');
+                      loadEnrolments();
+                    }}
+                  >
+                    <UserPlus size={14} />
+                    Grant Access to Learner
+                  </button>
                   <Link
                     to={`/courses/${c.slug}`}
                     target="_blank"
@@ -306,6 +391,20 @@ export function Admin() {
           data={data.settings}
           busy={busy}
           onSave={(body) => run(() => api('/admin/settings', { method: 'PUT', body }), 'Business settings updated.')}
+        />
+      ) : view === 'access' ? (
+        <LearnerAccessWorkspace
+          courses={data.courses || []}
+          enrolments={enrolments}
+          grantEmail={grantEmail}
+          setGrantEmail={setGrantEmail}
+          grantCourseId={grantCourseId}
+          setGrantCourseId={setGrantCourseId}
+          grantBusy={grantBusy}
+          onGrantAccess={handleGrantAccess}
+          onRevokeAccess={handleRevokeAccess}
+          accessSearch={accessSearch}
+          setAccessSearch={setAccessSearch}
         />
       ) : selected ? (
         <div className="owner-editor-workspace">
@@ -870,3 +969,175 @@ function SettingsForm({ data, busy, onSave }) {
     </form>
   );
 }
+
+// ─── LEARNER COURSE ACCESS & ENROLMENTS WORKSPACE ─────────────────────────────
+function LearnerAccessWorkspace({
+  courses,
+  enrolments,
+  grantEmail,
+  setGrantEmail,
+  grantCourseId,
+  setGrantCourseId,
+  grantBusy,
+  onGrantAccess,
+  onRevokeAccess,
+  accessSearch,
+  setAccessSearch,
+}) {
+  const filtered = useMemo(() => {
+    if (!accessSearch.trim()) return enrolments;
+    const q = accessSearch.toLowerCase();
+    return enrolments.filter(
+      (e) =>
+        e.user_email?.toLowerCase().includes(q) ||
+        e.user_name?.toLowerCase().includes(q) ||
+        e.course_title?.toLowerCase().includes(q) ||
+        e.eyebrow?.toLowerCase().includes(q)
+    );
+  }, [enrolments, accessSearch]);
+
+  return (
+    <div className="admin-access-workspace">
+      {/* ── 1. GRANT ACCESS CARD ────────────────────────────── */}
+      <section className="grant-access-card">
+        <span className="eyebrow">ADMINISTRATOR PERMISSION</span>
+        <h2>Grant Course Access to Any Learner</h2>
+        <p>
+          Instantly assign full, lifetime access to any email address for any programme (Silver,
+          Gold, Diamond). If the email is not registered yet, an account will be automatically
+          provisioned and verified immediately.
+        </p>
+
+        <form className="grant-access-form" onSubmit={onGrantAccess}>
+          <label>
+            Learner Email Address
+            <input
+              type="text"
+              required
+              placeholder="e.g. learner@example.com or student username"
+              value={grantEmail}
+              onChange={(e) => setGrantEmail(e.target.value)}
+            />
+          </label>
+
+          <label>
+            Select Programme
+            <select
+              required
+              value={grantCourseId}
+              onChange={(e) => setGrantCourseId(e.target.value)}
+            >
+              <option value="" disabled>
+                Choose course / programme...
+              </option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.eyebrow} · {c.title} ({money(c.price)})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            className="button"
+            type="submit"
+            disabled={grantBusy || !grantEmail.trim() || !grantCourseId}
+          >
+            <UserPlus size={16} />
+            {grantBusy ? 'Granting...' : 'Grant Full Access'}
+          </button>
+        </form>
+      </section>
+
+      {/* ── 2. ENROLMENTS & ACCESS DIRECTORY ───────────────── */}
+      <section className="enrolments-directory-card">
+        <div className="directory-header-row">
+          <div>
+            <h3>Active Enrolments Directory ({enrolments.length})</h3>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: '.84rem' }}>
+              All students who currently possess unlocked access to programmes.
+            </p>
+          </div>
+          <input
+            className="directory-search-input"
+            type="search"
+            placeholder="Search by student email, name or course..."
+            value={accessSearch}
+            onChange={(e) => setAccessSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Student / Recipient</th>
+                <th>Course Programme</th>
+                <th>Access Type</th>
+                <th>Date Granted</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((e) => {
+                const isAdminGrant = e.provider_order_id?.startsWith('admin_grant_');
+                return (
+                  <tr key={e.order_id}>
+                    <td>
+                      <strong>{e.user_email}</strong>
+                      <small>{e.user_name || 'Learner'}</small>
+                    </td>
+                    <td>
+                      <div>
+                        <strong>{e.course_title}</strong>
+                        <small>
+                          {e.eyebrow} ({e.level})
+                        </small>
+                      </div>
+                    </td>
+                    <td>
+                      {isAdminGrant ? (
+                        <span className="access-type-pill grant">
+                          <CheckCircle2 size={12} /> Admin Grant
+                        </span>
+                      ) : (
+                        <span className="access-type-pill paid">
+                          Paid Checkout ({money(e.amount)})
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {new Date(e.created_at).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="button small outline revoke-btn"
+                        onClick={() => onRevokeAccess(e.order_id, e.user_email, e.course_title)}
+                        title="Revoke access immediately"
+                      >
+                        <Trash2 size={13} /> Revoke
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!filtered.length && (
+            <p className="muted" style={{ padding: '28px', textAlign: 'center' }}>
+              {accessSearch
+                ? 'No enrolments match your search query.'
+                : 'No student enrolments recorded yet.'}
+            </p>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+

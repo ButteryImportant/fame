@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { LockKeyhole, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Notice, Brand } from '../components/shared';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { api } from '../api.js';
 
 export function AuthPage({ mode = 'login' }) {
@@ -105,10 +106,13 @@ export function AuthPage({ mode = 'login' }) {
         </div>
       </aside>
       <main className="auth-main" id="main">
-        <Link className="back-link" to="/">
-          <ArrowLeft size={16} />
-          Back to FAME
-        </Link>
+        <div className="auth-top-bar">
+          <Link className="back-link" to="/">
+            <ArrowLeft size={16} />
+            Back to FAME
+          </Link>
+          <ThemeToggle />
+        </div>
         <div className="auth-form">
           <span className="eyebrow">YOUR FAME ACCOUNT</span>
           <h1>{title}</h1>

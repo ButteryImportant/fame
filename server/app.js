@@ -750,6 +750,92 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     });
     res.json({ ok: true });
   });
+  app.get('/api/admin/enrolments', (_req, res) => {
+    const enrolments = db
+      .prepare(
+        `SELECT o.id AS order_id, o.amount, o.status, o.created_at, o.paid_at, o.provider_order_id,
+                u.id AS user_id, u.name AS user_name, u.email AS user_email,
+                c.id AS course_id, c.title AS course_title, c.eyebrow, c.level, c.accent, c.slug
+         FROM orders o
+         JOIN users u ON o.user_id = u.id
+         JOIN courses c ON o.course_id = c.id
+         ORDER BY o.created_at DESC LIMIT 250`
+      )
+      .all();
+    res.json({ enrolments });
+  });
+  app.post('/api/admin/enrol', async (req, res) => {
+    const d = parse(
+      z.object({
+        email: z.string().trim().toLowerCase().min(3).max(254),
+        courseId: z.string().trim().min(1).max(128),
+      }),
+      req.body
+    );
+    const course = db.prepare('SELECT * FROM courses WHERE id=?').get(d.courseId);
+    if (!course) fail('Course not found.', 404);
+
+    let learner = db.prepare('SELECT * FROM users WHERE email=?').get(d.email);
+    if (!learner) {
+      const id = randomUUID();
+      const rawPassword = randomUUID().replace(/-/g, '').slice(0, 16);
+      const pHash = await hashPassword(rawPassword);
+      const learnerName = d.email.includes('@') ? d.email.split('@')[0] : d.email;
+      db.prepare(
+        "INSERT INTO users(id,name,email,password_hash,role,verified,created_at) VALUES(?,?,?,?,'student',1,?)"
+      ).run(id, learnerName, d.email, pHash, Date.now());
+      learner = { id, name: learnerName, email: d.email, role: 'student', verified: 1 };
+    }
+
+    const existing = db
+      .prepare(
+        "SELECT * FROM orders WHERE user_id=? AND course_id=? AND status='captured' AND refund_amount<amount LIMIT 1"
+      )
+      .get(learner.id, course.id);
+
+    if (existing) {
+      return res.json({
+        ok: true,
+        alreadyEnrolled: true,
+        message: `${learner.email} already has active access to ${course.title}.`,
+        user: safeUser(learner),
+        orderId: existing.id,
+      });
+    }
+
+    const orderId = randomUUID();
+    const orderAmount = Math.max(course.price || 0, 1);
+    const now = Date.now();
+    db.prepare(
+      "INSERT INTO orders(id,user_id,course_id,provider_order_id,payment_id,amount,currency,status,refund_amount,created_at,paid_at) VALUES(?,?,?,?,?,?,'INR','captured',0,?,?)"
+    ).run(orderId, learner.id, course.id, 'admin_grant_' + randomUUID(), 'grant_' + randomUUID(), orderAmount, now, now);
+
+    try {
+      const appUrl = config.publicUrl || 'https://fame.manmathbiradar.com';
+      mailer.queue(
+        learner.email,
+        `Welcome to ${course.title} · FAME`,
+        `Hello ${learner.name},\n\nYou have been granted full lifetime access to "${course.title}".\n\nLog in with your email (${learner.email}) at any time to begin learning:\n${appUrl}/login\n\nBest regards,\nManmath Biradar & The FAME Team`
+      );
+      mailer.flush().catch(() => {});
+    } catch (e) {
+      console.error('Mail queue failed:', e);
+    }
+
+    res.status(201).json({
+      ok: true,
+      message: `Full access to "${course.title}" granted to ${learner.email}.`,
+      user: safeUser(learner),
+      orderId,
+    });
+  });
+  app.post('/api/admin/revoke-access', (req, res) => {
+    const d = parse(z.object({ orderId: z.string().uuid() }), req.body);
+    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(d.orderId);
+    if (!order) fail('Enrolment order not found.', 404);
+    db.prepare("UPDATE orders SET status='refunded', refund_amount=amount WHERE id=?").run(d.orderId);
+    res.json({ ok: true, message: 'Enrolment access revoked successfully.' });
+  });
   app.put('/api/admin/settings', (req, res) => {
     const d = parse(
       z.object({

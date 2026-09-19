@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Compass, Settings, Layers, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Brand } from './shared';
+import { ThemeToggle } from './ThemeToggle';
 
 export function StudentLayout({ children }) {
   const { user, logout } = useAuth();
@@ -42,6 +43,9 @@ export function StudentLayout({ children }) {
         </div>
       </aside>
       <main id="main" className="student-main">
+        <div className="student-top-bar">
+          <ThemeToggle />
+        </div>
         {children}
       </main>
     </div>

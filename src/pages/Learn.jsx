@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useLoad } from '../hooks/useLoad';
 import { Notice, Loader, Brand, formatVideoEmbedUrl } from '../components/shared';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { groupBy } from '../utils/groupBy.js';
 import { api } from '../api.js';
 
@@ -133,6 +134,8 @@ export function Learn() {
             {theaterMode ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
             <span className="btn-label">{theaterMode ? 'Standard' : 'Theater'}</span>
           </button>
+
+          <ThemeToggle />
 
           <Link className="back-link learn-back-btn" to="/dashboard">
             <ArrowLeft size={16} />
