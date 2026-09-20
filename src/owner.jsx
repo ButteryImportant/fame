@@ -114,7 +114,7 @@ export function Admin() {
     }
   }
 
-  async function handleRevokeAccess(orderId, email, courseTitle) {
+  async function handleRevokeAccess(orderId, email, courseTitle, userId, courseId) {
     if (!window.confirm(`Revoke full course access for "${email}" to "${courseTitle}"?`)) return;
     setBusy(true);
     setError('');
@@ -122,7 +122,7 @@ export function Admin() {
     try {
       const res = await api('/admin/revoke-access', {
         method: 'POST',
-        body: { orderId },
+        body: { orderId, email, userId, courseId },
       });
       setMessage(res.message);
       await loadEnrolments();
@@ -1117,7 +1117,7 @@ function LearnerAccessWorkspace({
                       <button
                         type="button"
                         className="button small outline revoke-btn"
-                        onClick={() => onRevokeAccess(e.order_id, e.user_email, e.course_title)}
+                        onClick={() => onRevokeAccess(e.order_id, e.user_email, e.course_title, e.user_id, e.course_id)}
                         title="Revoke access immediately"
                       >
                         <Trash2 size={13} /> Revoke

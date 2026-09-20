@@ -120,7 +120,7 @@ export function CourseDetail() {
                     ? 'Enrolment dates will be announced here.'
                     : 'One-time payment · Course access in your account'}
                 </p>
-                {c.hasAccess ? (
+                {c.hasAccess || user?.role === 'admin' ? (
                   <Link className="button full" to="/dashboard">
                     Continue learning <Arrow />
                   </Link>
