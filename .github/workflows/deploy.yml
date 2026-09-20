@@ -27,6 +27,9 @@ jobs:
             if [ ! -f .env ]; then
               cp .env.example .env
             else
+              grep -q '^NODE_ENV=' .env && sed -i 's/^NODE_ENV=.*/NODE_ENV=production/' .env || echo 'NODE_ENV=production' >> .env
+              grep -q '^APP_ORIGIN=' .env && sed -i 's|^APP_ORIGIN=.*|APP_ORIGIN=https://foodbusinesscoach.online|' .env || echo 'APP_ORIGIN=https://foodbusinesscoach.online' >> .env
+              grep -q '^TRUST_PROXY_HOPS=' .env && sed -i 's/^TRUST_PROXY_HOPS=.*/TRUST_PROXY_HOPS=1/' .env || echo 'TRUST_PROXY_HOPS=1' >> .env
               grep -q '^PAYMENT_MODE=' .env && sed -i 's/^PAYMENT_MODE=.*/PAYMENT_MODE=razorpay/' .env || echo 'PAYMENT_MODE=razorpay' >> .env
               grep -q '^RAZORPAY_KEY_ID=' .env && sed -i 's/^RAZORPAY_KEY_ID=.*/RAZORPAY_KEY_ID=rzp_live_TeG8WxROxea4pV/' .env || echo 'RAZORPAY_KEY_ID=rzp_live_TeG8WxROxea4pV' >> .env
               grep -q '^RAZORPAY_KEY_SECRET=' .env && sed -i 's/^RAZORPAY_KEY_SECRET=.*/RAZORPAY_KEY_SECRET=r3M83t9ByHljABLI2jTWNViK/' .env || echo 'RAZORPAY_KEY_SECRET=r3M83t9ByHljABLI2jTWNViK' >> .env

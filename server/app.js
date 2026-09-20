@@ -202,12 +202,26 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     );
     return raw;
   }
-  function verifyMail(user) {
+  function getAppOrigin(req) {
+    if (config.origin && !config.origin.includes('localhost') && !config.origin.includes('127.0.0.1')) {
+      return config.origin;
+    }
+    if (req) {
+      const host = (req.get('x-forwarded-host') || req.get('host') || '').trim();
+      if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+        const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+        return `${proto}://${host}`;
+      }
+    }
+    return config.production ? 'https://foodbusinesscoach.online' : config.origin;
+  }
+  function verifyMail(user, req) {
     const raw = issueToken(user.id, 'verify');
+    const origin = getAppOrigin(req);
     mailer.queue(
       user.email,
       'Verify your FAME account',
-      `Hello ${user.name},\n\nVerify your email to activate your FAME account:\n${config.origin}/verify-email?token=${raw}\n\nThis link expires in 24 hours. If you did not create this account, ignore this email.\n\nFAME`
+      `Hello ${user.name},\n\nVerify your email to activate your FAME account:\n${origin}/verify-email?token=${raw}\n\nThis link expires in 24 hours. If you did not create this account, ignore this email.\n\nFAME`
     );
   }
   app.post('/api/auth/register', authLimit, async (req, res) => {
@@ -234,7 +248,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         return res.status(409).json({ error: 'Unable to create this account. Try signing in.' });
       throw e;
     }
-    verifyMail(user);
+    verifyMail(user, req);
     const profile = ensureUserProfile(user);
     const csrf = createSession(db, config, req, res, user.id);
     res
@@ -292,10 +306,11 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     const user = db.prepare('SELECT * FROM users WHERE email=?').get(data.email);
     if (user) {
       const raw = issueToken(user.id, 'reset');
+      const origin = getAppOrigin(req);
       mailer.queue(
         user.email,
         'Reset your FAME password',
-        `Reset your password using this one-time link:\n${config.origin}/reset-password?token=${raw}\n\nThis link expires in one hour. If you did not request this, ignore this email.`
+        `Reset your password using this one-time link:\n${origin}/reset-password?token=${raw}\n\nThis link expires in one hour. If you did not request this, ignore this email.`
       );
     }
     res.json({ message: 'If an account exists, a password reset link will be sent.' });
@@ -331,7 +346,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     res.json({ message: 'Email verified. Your account is ready.' });
   });
   app.post('/api/auth/resend', requireUser, tokenLimit, (req, res) => {
-    if (!req.user.verified) verifyMail(req.user);
+    if (!req.user.verified) verifyMail(req.user, req);
     res.json({ message: 'Check your email for a verification link.' });
   });
   app.patch('/api/account', requireUser, (req, res) => {
@@ -397,13 +412,14 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       video_url: l.video_url.startsWith('media:') ? `/api/media/${l.id}` : l.video_url,
     };
   }
-  function sendAccessMail(order) {
+  function sendAccessMail(order, req) {
     const user = db.prepare('SELECT * FROM users WHERE id=?').get(order.user_id),
       course = db.prepare('SELECT * FROM courses WHERE id=?').get(order.course_id);
+    const origin = getAppOrigin(req);
     mailer.queue(
       user.email,
       `Your FAME course is ready: ${course.title}`,
-      `Hello ${user.name},\n\nYour payment of INR ${(order.amount / 100).toFixed(2)} has been confirmed. ${course.title} is now in your account.\n\nStart learning: ${config.origin}/dashboard\nOrder reference: ${order.id}\n\nFAME`
+      `Hello ${user.name},\n\nYour payment of INR ${(order.amount / 100).toFixed(2)} has been confirmed. ${course.title} is now in your account.\n\nStart learning: ${origin}/dashboard\nOrder reference: ${order.id}\n\nFAME`
     );
   }
   app.post(

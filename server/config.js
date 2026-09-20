@@ -4,7 +4,12 @@ export function loadConfig(overrides = {}) {
   const c = {
     production,
     port: Number(process.env.PORT || 4173),
-    origin: process.env.APP_ORIGIN || 'http://localhost:4173',
+    origin:
+      process.env.APP_ORIGIN && !process.env.APP_ORIGIN.includes('localhost')
+        ? process.env.APP_ORIGIN
+        : production
+          ? 'https://foodbusinesscoach.online'
+          : process.env.APP_ORIGIN || 'http://localhost:4173',
     dbPath: path.resolve(process.env.DATABASE_PATH || './data/fame.sqlite'),
     paymentMode: process.env.PAYMENT_MODE || 'demo',
     keyId: process.env.RAZORPAY_KEY_ID || '',
