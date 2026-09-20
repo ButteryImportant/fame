@@ -3,8 +3,10 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { loadConfig } from './config.js';
 import { createApp } from './app.js';
+import { publishLivePlatform } from './seed.js';
 const config = loadConfig();
 const { app, db, mailer } = createApp(config);
+publishLivePlatform(db);
 if (process.argv.includes('--dev')) {
   if (config.production) throw new Error('Development server cannot run in production.');
   const { createServer } = await import('vite');

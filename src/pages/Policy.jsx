@@ -51,7 +51,7 @@ export function Policy({ kind }) {
               </a>
             ) : (
               <p>
-                Email us directly at <strong>support@famecommunity.in</strong> or through your student dashboard.
+                Email us directly at <strong>support@foodbusinesscoach.online</strong> or through your student dashboard.
               </p>
             )}
             {s?.business_address && (

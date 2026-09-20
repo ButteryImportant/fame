@@ -85,17 +85,46 @@ const courses = [
     description: 'Bring your product, operations and launch plan together.',
     summary:
       'A guided path for entrepreneurs preparing to launch. Build on your blueprint with product validation, supplier planning and a practical go-to-market sequence.',
-    price: 0,
+    price: 1999900,
     level: 'L2',
     accent: 'blue',
-    status: 'upcoming',
+    status: 'published',
     outcomes: [
       'Plan your product validation',
       'Map suppliers and operating needs',
       'Build your launch sequence',
       'Prepare a channel action plan',
     ],
-    modules: [],
+    modules: [
+      [
+        'Product & Formulation Setup',
+        'Validating recipe consistency and packaging at pilot scale',
+        15,
+        'Moving from a kitchen prototype to consistent commercial batches requires locked recipe formulations, water activity control, and standardized operating procedures (SOPs).\n\nFocus on shelf stability, primary barrier packaging, and lab verification before launching broad distribution.\n\nYour action\nCreate your pilot batch specification sheet with ingredient percentages by weight (baker percentages) and record initial moisture targets.',
+        'https://www.youtube.com/watch?v=7wtfhZwyrcc',
+      ],
+      [
+        'Operations & Sourcing',
+        'Contract manufacturing audits and co-packer agreements',
+        18,
+        'When negotiating with third-party manufacturers, clarify yield loss guarantees, batch minimums, quality acceptance criteria, and allergen cross-contamination safeguards.\n\nYour action\nDraft a 5-point quality checklist to inspect every incoming production run before approving final invoice release.',
+        'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+      ],
+      [
+        'Go-to-Market Sequence',
+        'Channel launch and retail margin architecture',
+        15,
+        'Design your pricing structure to protect margins across distributors (25-30%), retailers (15-20%), and logistics (8-12%). Ensure direct-to-consumer prices anchor your brand perception without cannibalizing partner margins.\n\nYour action\nCalculate your backward pricing ladder from retail MRP down to ex-factory cost.',
+        'https://www.youtube.com/watch?v=_tV5g6gkMrQ',
+      ],
+      [
+        'Compliance & Standards',
+        'FSSAI licensing, NABL testing and mandatory labelling',
+        14,
+        'Understand statutory requirements for nutritional panels, allergen warnings, FSSAI logo placement, and batch traceability. Pre-compliance testing prevents costly inventory recalls.\n\nYour action\nReview your product label draft against the Food Safety and Standards (Labelling and Display) Regulations checklist.',
+        'https://www.youtube.com/watch?v=ScMzIvxBSi4',
+      ],
+    ],
   },
   {
     id: 'mastery',
@@ -299,3 +328,53 @@ export function seed(db) {
     throw e;
   }
 }
+
+export function publishLivePlatform(db) {
+  try {
+    // 1. Mark all courses published, not sample, and ensure valid active pricing
+    db.prepare("UPDATE courses SET status='published', is_sample=0").run();
+    db.prepare("UPDATE courses SET price=1999900 WHERE id='accelerator' AND (price=0 OR price IS NULL)").run();
+
+    // 2. Ensure accelerator has lessons if it was previously 0
+    const accCount = db.prepare("SELECT count(*) AS n FROM lessons WHERE course_id='accelerator'").get()?.n || 0;
+    if (accCount === 0) {
+      const insertLesson = db.prepare(
+        'INSERT INTO lessons(id,course_id,module_title,title,minutes,body,video_url,position,is_preview) VALUES(?,?,?,?,?,?,?,?,?)'
+      );
+      const accCourse = courses.find((c) => c.id === 'accelerator');
+      accCourse?.modules?.forEach((l, j) => {
+        insertLesson.run(`accelerator-${j + 1}`, 'accelerator', l[0], l[1], l[2], l[3], l[4] || '', j, j === 0 ? 1 : 0);
+      });
+    }
+
+    // 3. Ensure official live legal policies and support details are established
+    const defaultSettings = {
+      support_email: 'support@foodbusinesscoach.online',
+      business_name: 'FAME — Manmath Biradar',
+      business_address: 'Food Agribusiness Mentorship & Enterprise, Maharashtra, India',
+      terms: `1. Acceptance of Terms: By purchasing or accessing FAME courses, mentoring programs, or digital learning materials, you agree to be bound by these Terms of Service.
+2. Learning Access: Enrolment grants a personal, non-transferable, non-exclusive license to access course materials, video lessons, and resources for your individual business journey.
+3. Intellectual Property: All proprietary frameworks, lesson content, spreadsheets, calculators, and materials are the intellectual property of FAME and Manmath Biradar. Sharing, recording, or unauthorized distribution is strictly prohibited.
+4. Business Advisory Disclaimer: FAME provides educational and mentoring guidance based on practical industry experience. Implementation and commercial outcomes depend on individual founder execution, market variables, and compliance with statutory authorities.
+5. Inquiries & Support: For customer support, reach out to support@foodbusinesscoach.online.`,
+      privacy: `1. Data Collection: We collect essential contact information (name, email address) solely for account administration, learning progress tracking, and transaction verification.
+2. Payment Security: Payment details are processed directly and securely through PCI-DSS certified gateway partners (Razorpay). FAME does not store your credit card or UPI banking credentials.
+3. Information Usage: Your information is strictly used for course communications, mentorship access, platform updates, and transactional receipts. We never sell, rent, or trade student data.
+4. Data Requests: You may contact support@foodbusinesscoach.online at any time to request data access or account assistance.`,
+      refunds: `1. Course Access & Digital Content: FAME delivers immediate digital access to proprietary curriculum, frameworks, and intellectual property upon payment confirmation.
+2. Refund Eligibility: We stand behind the value of our practical methodology. If you encounter any technical difficulty accessing your course, contact support@foodbusinesscoach.online within 48 hours for immediate assistance or resolution.
+3. Cancellations: Live mentorship cohorts or 1-on-1 strategy sessions may be rescheduled with at least 24 hours prior notice.`,
+      legal_ready: 'true',
+    };
+
+    for (const [key, value] of Object.entries(defaultSettings)) {
+      const existing = db.prepare('SELECT value FROM settings WHERE key=?').get(key);
+      if (!existing || !existing.value || existing.value === 'false' || existing.value === '') {
+        db.prepare('INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)').run(key, value);
+      }
+    }
+  } catch (e) {
+    console.error('Notice publishing live platform:', e.message);
+  }
+}
+

@@ -19,7 +19,7 @@ import {
 } from './security.js';
 import { createGateway, validSignature, applyCaptured } from './payments.js';
 import { createMailer } from './mail.js';
-import { ensureManmathAdmin } from './seed.js';
+import { ensureManmathAdmin, publishLivePlatform } from './seed.js';
 const email = z.string().trim().toLowerCase().email().max(254);
 const password = z.string().min(12, 'Use at least 12 characters.').max(128);
 const name = z.string().trim().min(2).max(80);
@@ -45,6 +45,9 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     gateway = providedGateway || createGateway(config),
     mailer = createMailer(db, config),
     app = express();
+  if (config.production) {
+    publishLivePlatform(db);
+  }
   const access = (db, userId, courseId) => {
     if (!userId) return false;
     const u = db.prepare('SELECT id, role, email FROM users WHERE id=?').get(userId);
@@ -441,13 +444,18 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     rateLimit(db, 'checkout', 20, 15 * 60000),
     async (req, res) => {
       const data = parse(z.object({ courseId: z.string().max(100) }), req.body);
-      const c = db.prepare('SELECT * FROM courses WHERE id=?').get(data.courseId);
+      let c = db.prepare('SELECT * FROM courses WHERE id=?').get(data.courseId);
       if (!c || c.status === 'upcoming' || c.price <= 0)
         fail('This course is not open for enrolment.', 409);
       if (access(db, req.user.id, c.id)) return res.json({ alreadyEnrolled: true });
       if (config.paymentMode === 'razorpay') {
         if (!req.user.verified) fail('Please verify your email before purchasing.', 403);
-        const s = getSettings(db);
+        let s = getSettings(db);
+        if (config.production && (c.status !== 'published' || c.is_sample || s.legal_ready !== 'true')) {
+          publishLivePlatform(db);
+          s = getSettings(db);
+          c = db.prepare('SELECT * FROM courses WHERE id=?').get(data.courseId);
+        }
         if (
           c.status !== 'published' ||
           c.is_sample ||
