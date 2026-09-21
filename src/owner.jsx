@@ -23,10 +23,12 @@ import {
   Shield,
   FileText,
   HelpCircle,
+  Mail,
 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { StudentLayout } from './components/StudentLayout';
 import { Notice, Loader, formatVideoEmbedUrl } from './components/shared';
+import { UsersDirectoryWorkspace } from './components/UsersDirectoryWorkspace';
 import { api, money } from './api.js';
 
 const blankCourse = {
@@ -72,12 +74,119 @@ export function Admin() {
   const [grantBusy, setGrantBusy] = useState(false);
   const [accessSearch, setAccessSearch] = useState('');
 
+  // Accounts & Email DB state
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [preapprovedGrants, setPreapprovedGrants] = useState([]);
+  const [preapprovedLoading, setPreapprovedLoading] = useState(false);
+
   async function loadEnrolments() {
     try {
       const res = await api('/admin/enrolments');
       setEnrolments(res.enrolments || []);
     } catch (e) {
       setError(e.message);
+    }
+  }
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    try {
+      const res = await api('/admin/users');
+      setUsers(res.users || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setUsersLoading(false);
+    }
+  }
+
+  async function loadPreapproved() {
+    setPreapprovedLoading(true);
+    try {
+      const res = await api('/admin/preapproved');
+      setPreapprovedGrants(res.grants || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setPreapprovedLoading(false);
+    }
+  }
+
+  async function handleDeleteUser(userId, email) {
+    if (!window.confirm(`Permanently delete account for "${email}"?\n\nThis will remove their login access, orders, course progress, profile, and community posts from the database.`)) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await api(`/admin/users/${userId}`, { method: 'DELETE' });
+      setMessage(res.message);
+      await loadUsers();
+      await loadEnrolments();
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleToggleVerified(targetUser) {
+    try {
+      const res = await api(`/admin/users/${targetUser.id}`, {
+        method: 'PUT',
+        body: { verified: !targetUser.verified },
+      });
+      setMessage(`Account for ${targetUser.email} marked as ${!targetUser.verified ? 'Verified' : 'Unverified'}.`);
+      await loadUsers();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleClearAllPreapproved() {
+    if (!window.confirm('Are you sure you want to delete and clear ALL pre-approved grants from the database?\n\nThis will remove all pending grants so you can grant learners access manually.')) {
+      return;
+    }
+    setPreapprovedLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await api('/admin/preapproved', {
+        method: 'DELETE',
+        body: { all: true },
+      });
+      setMessage(res.message);
+      await loadPreapproved();
+      await loadEnrolments();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPreapprovedLoading(false);
+    }
+  }
+
+  async function handleDeletePreapproved(grantId, email) {
+    if (!window.confirm(`Remove pre-approved grant for "${email}"?`)) {
+      return;
+    }
+    setPreapprovedLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await api('/admin/preapproved', {
+        method: 'DELETE',
+        body: { id: grantId },
+      });
+      setMessage(res.message);
+      await loadPreapproved();
+      await loadEnrolments();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPreapprovedLoading(false);
     }
   }
 
@@ -89,6 +198,8 @@ export function Admin() {
       setGrantCourseId(d.courses[0].id);
     }
     loadEnrolments().catch(() => {});
+    loadUsers().catch(() => {});
+    loadPreapproved().catch(() => {});
     return d;
   }
 
@@ -238,6 +349,19 @@ export function Admin() {
           >
             <BookOpen size={16} />
             Programmes &amp; Overview
+          </button>
+          <button
+            className={view === 'users' ? 'active' : ''}
+            onClick={() => {
+              setView('users');
+              setMessage('');
+              setError('');
+              loadUsers();
+              loadPreapproved();
+            }}
+          >
+            <Mail size={16} />
+            Accounts &amp; Email DB ({users.length})
           </button>
           <button
             className={view === 'access' ? 'active' : ''}
@@ -391,6 +515,38 @@ export function Admin() {
           data={data.settings}
           busy={busy}
           onSave={(body) => run(() => api('/admin/settings', { method: 'PUT', body }), 'Business settings updated.')}
+        />
+      ) : view === 'users' ? (
+        <UsersDirectoryWorkspace
+          currentUser={user}
+          users={users}
+          usersLoading={usersLoading}
+          onRefreshUsers={loadUsers}
+          onDeleteUser={handleDeleteUser}
+          onToggleVerified={handleToggleVerified}
+          courses={data.courses || []}
+          onUserCreated={async () => {
+            await loadUsers();
+            await loadEnrolments();
+            await refresh();
+          }}
+          onUserUpdated={async () => {
+            await loadUsers();
+          }}
+          onGrantAccessForUser={(u) => {
+            setGrantEmail(u.email);
+            setView('access');
+            loadEnrolments();
+          }}
+          preapprovedGrants={preapprovedGrants}
+          preapprovedLoading={preapprovedLoading}
+          onClearAllPreapproved={handleClearAllPreapproved}
+          onDeletePreapproved={handleDeletePreapproved}
+          onGrantSuccess={async () => {
+            await loadEnrolments();
+            await loadUsers();
+            await refresh();
+          }}
         />
       ) : view === 'access' ? (
         <LearnerAccessWorkspace
@@ -1080,7 +1236,8 @@ function LearnerAccessWorkspace({
             </thead>
             <tbody>
               {filtered.map((e) => {
-                const isAdminGrant = e.provider_order_id?.startsWith('admin_grant_');
+                const isAdminGrant = e.provider_order_id?.startsWith('admin_grant_') || e.provider_order_id?.startsWith('pregrant_');
+                const isPreapproved = e.provider_order_id === 'preapproved_grant' || e.status === 'preapproved';
                 return (
                   <tr key={e.order_id}>
                     <td>
@@ -1096,7 +1253,11 @@ function LearnerAccessWorkspace({
                       </div>
                     </td>
                     <td>
-                      {isAdminGrant ? (
+                      {isPreapproved ? (
+                        <span className="access-type-pill" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>
+                          <Clock size={12} /> Pre-approved (Pending Signup)
+                        </span>
+                      ) : isAdminGrant ? (
                         <span className="access-type-pill grant">
                           <CheckCircle2 size={12} /> Admin Grant
                         </span>

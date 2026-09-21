@@ -101,6 +101,59 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       WHERE o.user_id = ? AND o.status IN ('captured', 'demo') AND o.refund_amount < o.amount
     `).all(userId);
   };
+  const fulfillPreapprovedGrants = (user, req = null) => {
+    if (!user?.email || !user?.id) return;
+    const cleanEmail = user.email.trim().toLowerCase();
+    const grants = db
+      .prepare('SELECT * FROM preapproved_grants WHERE LOWER(email)=?')
+      .all(cleanEmail);
+    if (!grants || !grants.length) return;
+
+    for (const grant of grants) {
+      const course = db.prepare('SELECT * FROM courses WHERE id=?').get(grant.course_id);
+      if (!course) continue;
+
+      const existingOrder = db
+        .prepare(
+          "SELECT id FROM orders WHERE user_id=? AND course_id=? AND (status='captured' OR status='demo') AND refund_amount<amount LIMIT 1"
+        )
+        .get(user.id, course.id);
+
+      if (!existingOrder) {
+        const orderId = randomUUID();
+        const orderAmount = Math.max(course.price || 0, 1);
+        const now = Date.now();
+        db.prepare(
+          "INSERT INTO orders(id,user_id,course_id,provider_order_id,payment_id,amount,currency,status,refund_amount,created_at,paid_at) VALUES(?,?,?,?,?,?,'INR','captured',0,?,?)"
+        ).run(
+          orderId,
+          user.id,
+          course.id,
+          'pregrant_' + randomUUID(),
+          'grant_' + randomUUID(),
+          orderAmount,
+          now,
+          now
+        );
+
+        try {
+          const appUrl = config.publicUrl || 'https://foodbusinesscoach.online';
+          mailer.queue(
+            user.email,
+            `Welcome to ${course.title} · FAME`,
+            `Hello ${user.name || 'Learner'},\n\nYour account has been granted full lifetime access to "${course.title}".\n\nLog in at any time to continue learning:\n${appUrl}/dashboard\n\nBest regards,\nManmath Biradar & The FAME Team`
+          );
+          mailer.flush().catch(() => {});
+        } catch (e) {
+          console.error('Pre-grant mail queue failed:', e);
+        }
+      }
+
+      db.prepare(
+        'UPDATE preapproved_grants SET claimed_at=?, claimed_by_user_id=? WHERE id=?'
+      ).run(Date.now(), user.id, grant.id);
+    }
+  };
   app.use(
     helmet({
       contentSecurityPolicy: config.production
@@ -187,6 +240,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   const authLimit = rateLimit(db, 'auth', 30, 15 * 60000),
     tokenLimit = rateLimit(db, 'email', 8, 15 * 60000);
   app.get('/api/session', rateLimit(db, 'session', 180, 15 * 60000), (req, res) => {
+    if (req.user) fulfillPreapprovedGrants(req.user, req);
     const csrf = req.session?.csrf || createSession(db, config, req, res);
     const p = req.user ? ensureUserProfile(req.user) : null;
     res.json({
@@ -239,20 +293,37 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   }
   app.post('/api/auth/register', authLimit, async (req, res) => {
     const data = parse(z.object({ name, email, password }), req.body);
-    if (db.prepare('SELECT 1 FROM users WHERE email=?').get(data.email))
+    const cleanEmail = data.email.trim().toLowerCase();
+    const existing = db.prepare('SELECT * FROM users WHERE LOWER(email)=?').get(cleanEmail);
+    if (existing) {
+      const sessionsCount = db.prepare('SELECT COUNT(*) as c FROM sessions WHERE user_id=?').get(existing.id)?.c || 0;
+      const isPlaceholder = sessionsCount === 0 && !!db.prepare("SELECT 1 FROM orders WHERE user_id=? AND provider_order_id LIKE 'admin_grant_%'").get(existing.id);
+      if (isPlaceholder) {
+        const encoded = await hashPassword(data.password);
+        db.prepare('UPDATE users SET name=?, password_hash=?, verified=1 WHERE id=?').run(data.name, encoded, existing.id);
+        const updatedUser = db.prepare('SELECT * FROM users WHERE id=?').get(existing.id);
+        const profile = ensureUserProfile(updatedUser);
+        fulfillPreapprovedGrants(updatedUser, req);
+        const csrf = createSession(db, config, req, res, existing.id);
+        return res.status(201).json({ user: safeUser(updatedUser, profile), csrf });
+      }
       return res
         .status(409)
         .json({
           error: 'Unable to create this account. Try signing in or resetting your password.',
         });
-    const user = { id: randomUUID(), ...data };
+    }
+
+    const hasPregrant = !!db.prepare('SELECT 1 FROM preapproved_grants WHERE LOWER(email)=?').get(cleanEmail);
+    const user = { id: randomUUID(), ...data, email: cleanEmail };
     const encoded = await hashPassword(data.password);
     try {
-      db.prepare('INSERT INTO users(id,name,email,password_hash,created_at) VALUES(?,?,?,?,?)').run(
+      db.prepare('INSERT INTO users(id,name,email,password_hash,verified,created_at) VALUES(?,?,?,?,?,?)').run(
         user.id,
-        data.name,
-        data.email,
+        user.name,
+        user.email,
         encoded,
+        hasPregrant ? 1 : 0,
         Date.now()
       );
       ensureUserProfile(user);
@@ -261,7 +332,10 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         return res.status(409).json({ error: 'Unable to create this account. Try signing in.' });
       throw e;
     }
-    verifyMail(user, req);
+    fulfillPreapprovedGrants(user, req);
+    if (!hasPregrant) {
+      verifyMail(user, req);
+    }
     const profile = ensureUserProfile(user);
     const csrf = createSession(db, config, req, res, user.id);
     res
@@ -302,7 +376,14 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       }
     }
 
-    if (!valid || !user) fail('Email or password is incorrect.', 401);
+    if (!valid || !user) {
+      const hasPregrant = db.prepare('SELECT 1 FROM preapproved_grants WHERE LOWER(email)=?').get(idClean);
+      if (hasPregrant) {
+        fail('Your email is pre-approved for course access! Please click "Sign Up" above to create your password and begin.', 401);
+      }
+      fail('Email or password is incorrect.', 401);
+    }
+    fulfillPreapprovedGrants(user, req);
     const csrf = createSession(db, config, req, res, user.id);
     res.json({ user: safeUser(user), csrf });
   });
@@ -319,17 +400,26 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
   });
   app.post('/api/auth/forgot', tokenLimit, (req, res) => {
     const data = parse(z.object({ email }), req.body);
-    const user = db.prepare('SELECT * FROM users WHERE email=?').get(data.email);
+    const cleanEmail = data.email.trim().toLowerCase();
+    const user = db.prepare('SELECT * FROM users WHERE LOWER(email)=?').get(cleanEmail);
     if (user) {
       const raw = issueToken(user.id, 'reset');
       const origin = getAppOrigin(req);
       mailer.queue(
         user.email,
         'Reset your FAME password',
-        `Reset your password using this one-time link:\n${origin}/reset-password?token=${raw}\n\nThis link expires in one hour. If you did not request this, ignore this email.`
+        `Hello ${user.name},\n\nA password reset was requested for your FAME account:\n${origin}/reset-password?token=${raw}\n\nThis link expires in 1 hour. If you did not ask for this, ignore this email.\n\nFAME`
       );
+    } else {
+      const hasPregrant = db.prepare('SELECT 1 FROM preapproved_grants WHERE LOWER(email)=?').get(cleanEmail);
+      if (hasPregrant) {
+        return res.json({
+          ok: true,
+          message: 'Your email is pre-approved for course access. Please sign up to create your account password and begin.',
+        });
+      }
     }
-    res.json({ message: 'If an account exists, a password reset link will be sent.' });
+    res.json({ ok: true, message: 'If an account exists for this email, reset instructions have been sent.' });
   });
   app.post('/api/auth/reset', authLimit, async (req, res) => {
     const data = parse(z.object({ token: z.string().length(64), password }), req.body);
@@ -580,6 +670,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     res.json(row);
   });
   app.get('/api/dashboard', requireUser, (req, res) => {
+    fulfillPreapprovedGrants(req.user);
     const courses = db
       .prepare(
         req.user.role === 'admin'
@@ -1118,7 +1209,14 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
          JOIN users u ON o.user_id = u.id
          JOIN courses c ON o.course_id = c.id
          WHERE (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
-         ORDER BY o.created_at DESC LIMIT 250`
+         UNION ALL
+         SELECT p.id AS order_id, 0 AS amount, 'preapproved' AS status, p.created_at, p.created_at AS paid_at, 'preapproved_grant' AS provider_order_id,
+                '' AS user_id, 'Pending Registration' AS user_name, p.email AS user_email,
+                c.id AS course_id, c.title AS course_title, c.eyebrow, c.level, c.accent, c.slug
+         FROM preapproved_grants p
+         JOIN courses c ON p.course_id = c.id
+         WHERE p.claimed_at IS NULL
+         ORDER BY created_at DESC LIMIT 250`
       )
       .all();
     res.json({ enrolments });
@@ -1145,6 +1243,10 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       ).run(id, learnerName, d.email, pHash, Date.now());
       learner = { id, name: learnerName, email: d.email, role: 'student', verified: 1 };
     }
+
+    db.prepare(
+      "INSERT OR REPLACE INTO preapproved_grants(id, email, course_id, created_at, claimed_at, claimed_by_user_id) VALUES(?, ?, ?, ?, ?, ?)"
+    ).run(randomUUID(), d.email.toLowerCase(), course.id, Date.now(), learner ? Date.now() : null, learner ? learner.id : null);
 
     const existing = db
       .prepare(
@@ -1202,6 +1304,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     let targetCourseId = d.courseId;
 
     if (d.orderId) {
+      db.prepare('DELETE FROM preapproved_grants WHERE id=?').run(d.orderId);
       const order = db.prepare('SELECT * FROM orders WHERE id=?').get(d.orderId);
       if (order) {
         targetUserId = targetUserId || order.user_id;
@@ -1217,16 +1320,247 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       if (u) targetUserId = u.id;
     }
 
+    if (d.email && targetCourseId) {
+      db.prepare('DELETE FROM preapproved_grants WHERE LOWER(email)=? AND course_id=?').run(d.email.trim().toLowerCase(), targetCourseId);
+    }
+
     if (targetUserId && targetCourseId) {
       db.prepare(
         "UPDATE orders SET status='refunded', refund_amount=CASE WHEN amount > 0 THEN amount ELSE 1 END WHERE user_id=? AND course_id=? AND status IN ('captured', 'demo', 'created', 'creating')"
       ).run(targetUserId, targetCourseId);
-    } else if (!d.orderId) {
+    } else if (!d.orderId && !d.email) {
       fail('Please specify an enrolment order or learner to revoke.', 400);
     }
 
     res.json({ ok: true, message: 'Enrolment access revoked successfully.' });
   });
+
+  app.get('/api/admin/users', (_req, res) => {
+    const rawUsers = db
+      .prepare(
+        `SELECT u.id, u.name, u.email, u.role, u.verified, u.created_at,
+                p.handle, p.avatar, p.headline
+         FROM users u
+         LEFT JOIN profiles p ON p.user_id = u.id
+         ORDER BY u.created_at DESC`
+      )
+      .all();
+
+    const enrollments = db
+      .prepare(
+        `SELECT o.user_id, c.id AS course_id, c.title AS course_title, c.eyebrow, c.level, c.slug, o.status, o.created_at AS enrolled_at
+         FROM orders o
+         JOIN courses c ON o.course_id = c.id
+         WHERE (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount`
+      )
+      .all();
+
+    const userCoursesMap = {};
+    for (const e of enrollments) {
+      if (!userCoursesMap[e.user_id]) userCoursesMap[e.user_id] = [];
+      userCoursesMap[e.user_id].push({
+        id: e.course_id,
+        title: e.course_title,
+        eyebrow: e.eyebrow,
+        level: e.level,
+        slug: e.slug,
+        status: e.status,
+        enrolled_at: e.enrolled_at,
+      });
+    }
+
+    const users = rawUsers.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      verified: !!u.verified,
+      created_at: u.created_at,
+      handle: u.handle || null,
+      avatar: u.avatar || null,
+      headline: u.headline || null,
+      courses: userCoursesMap[u.id] || [],
+    }));
+
+    res.json({ users });
+  });
+
+  app.post('/api/admin/users', async (req, res) => {
+    const d = parse(
+      z.object({
+        email: z.string().trim().toLowerCase().email().max(254),
+        name: z.string().trim().min(1).max(100),
+        password: z.string().min(6).max(128).optional(),
+        role: z.enum(['student', 'admin']).default('student'),
+        verified: z.boolean().default(true),
+        courseId: z.string().trim().min(1).max(128).optional(),
+      }),
+      req.body
+    );
+
+    const cleanEmail = d.email.toLowerCase();
+    const existing = db.prepare('SELECT id FROM users WHERE LOWER(email)=?').get(cleanEmail);
+    if (existing) fail('An account with this email address already exists.', 409);
+
+    const generatedPassword = d.password || randomUUID().replace(/-/g, '').slice(0, 12);
+    const pHash = await hashPassword(generatedPassword);
+    const userId = randomUUID();
+    const now = Date.now();
+
+    transaction(db, () => {
+      db.prepare(
+        'INSERT INTO users(id, name, email, password_hash, role, verified, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)'
+      ).run(userId, d.name, cleanEmail, pHash, d.role, d.verified ? 1 : 0, now);
+
+      if (d.courseId) {
+        const course = db.prepare('SELECT * FROM courses WHERE id=?').get(d.courseId);
+        if (course) {
+          const orderAmount = Math.max(course.price || 0, 1);
+          db.prepare(
+            "INSERT INTO orders(id,user_id,course_id,provider_order_id,payment_id,amount,currency,status,refund_amount,created_at,paid_at) VALUES(?,?,?,?,?,?,'INR','captured',0,?,?)"
+          ).run(
+            randomUUID(),
+            userId,
+            course.id,
+            'admin_grant_' + randomUUID(),
+            'grant_' + randomUUID(),
+            orderAmount,
+            now,
+            now
+          );
+          db.prepare(
+            'INSERT OR REPLACE INTO preapproved_grants(id, email, course_id, created_at, claimed_at, claimed_by_user_id) VALUES(?, ?, ?, ?, ?, ?)'
+          ).run(randomUUID(), cleanEmail, course.id, now, now, userId);
+        }
+      }
+    });
+
+    const newUser = db.prepare('SELECT id, name, email, role, verified, created_at FROM users WHERE id=?').get(userId);
+    res.status(201).json({
+      ok: true,
+      message: `Account created successfully for ${cleanEmail}.`,
+      user: { ...newUser, verified: !!newUser.verified },
+      initialPassword: generatedPassword,
+    });
+  });
+
+  app.put('/api/admin/users/:id', async (req, res) => {
+    const targetUserId = req.params.id;
+    const user = db.prepare('SELECT * FROM users WHERE id=?').get(targetUserId);
+    if (!user) fail('User not found.', 404);
+
+    const d = parse(
+      z.object({
+        name: z.string().trim().min(1).max(100).optional(),
+        email: z.string().trim().toLowerCase().email().max(254).optional(),
+        role: z.enum(['student', 'admin']).optional(),
+        verified: z.boolean().optional(),
+        password: z.string().min(6).max(128).optional(),
+      }),
+      req.body
+    );
+
+    if (d.email && d.email.toLowerCase() !== user.email.toLowerCase()) {
+      const emailClash = db.prepare('SELECT id FROM users WHERE LOWER(email)=? AND id!=?').get(d.email.toLowerCase(), targetUserId);
+      if (emailClash) fail('Another user is already registered with this email.', 409);
+    }
+
+    if (req.user.id === targetUserId && d.role === 'student' && user.role === 'admin') {
+      fail('You cannot remove admin privileges from your own active account.', 400);
+    }
+
+    const updatedName = d.name !== undefined ? d.name : user.name;
+    const updatedEmail = d.email !== undefined ? d.email.toLowerCase() : user.email;
+    const updatedRole = d.role !== undefined ? d.role : user.role;
+    const updatedVerified = d.verified !== undefined ? (d.verified ? 1 : 0) : user.verified;
+
+    let updatedPasswordHash = user.password_hash;
+    if (d.password) {
+      updatedPasswordHash = await hashPassword(d.password);
+    }
+
+    db.prepare(
+      'UPDATE users SET name=?, email=?, role=?, verified=?, password_hash=? WHERE id=?'
+    ).run(updatedName, updatedEmail, updatedRole, updatedVerified, updatedPasswordHash, targetUserId);
+
+    res.json({
+      ok: true,
+      message: 'Account updated successfully.',
+      user: {
+        id: targetUserId,
+        name: updatedName,
+        email: updatedEmail,
+        role: updatedRole,
+        verified: !!updatedVerified,
+      },
+    });
+  });
+
+  app.delete('/api/admin/users/:id', (req, res) => {
+    const targetUserId = req.params.id;
+    const user = db.prepare('SELECT * FROM users WHERE id=?').get(targetUserId);
+    if (!user) fail('User not found.', 404);
+
+    if (req.user.id === targetUserId) {
+      fail('You cannot delete your own active owner account.', 400);
+    }
+
+    transaction(db, () => {
+      // 1. Delete associated orders
+      db.prepare('DELETE FROM orders WHERE user_id=?').run(targetUserId);
+      // 2. Unclaim any preapproved grants associated with this user
+      db.prepare('UPDATE preapproved_grants SET claimed_at=NULL, claimed_by_user_id=NULL WHERE claimed_by_user_id=?').run(targetUserId);
+      // 3. Delete user (sessions, tokens, progress, profiles, community_posts cascade)
+      db.prepare('DELETE FROM users WHERE id=?').run(targetUserId);
+    });
+
+    res.json({
+      ok: true,
+      message: `Account for ${user.email} and all associated access records were permanently deleted.`,
+    });
+  });
+
+  app.get('/api/admin/preapproved', (_req, res) => {
+    const grants = db
+      .prepare(
+        `SELECT p.id, p.email, p.course_id, p.created_at, p.claimed_at, p.claimed_by_user_id,
+                c.title AS course_title, c.eyebrow, c.level,
+                u.name AS claimed_by_name
+         FROM preapproved_grants p
+         LEFT JOIN courses c ON p.course_id = c.id
+         LEFT JOIN users u ON p.claimed_by_user_id = u.id
+         ORDER BY p.created_at DESC`
+      )
+      .all();
+    res.json({ grants });
+  });
+
+  app.delete('/api/admin/preapproved', (req, res) => {
+    const d = parse(
+      z.object({
+        id: z.string().optional(),
+        all: z.boolean().optional(),
+      }),
+      req.body || {}
+    );
+
+    if (d.all) {
+      const result = db.prepare('DELETE FROM preapproved_grants').run();
+      return res.json({
+        ok: true,
+        message: `Cleared all ${result.changes} pre-approved email grant(s).`,
+        deletedCount: result.changes,
+      });
+    }
+
+    if (d.id) {
+      db.prepare('DELETE FROM preapproved_grants WHERE id=?').run(d.id);
+      return res.json({ ok: true, message: 'Pre-approved grant removed.' });
+    }
+
+    fail('Please specify an id or set all=true to clear preapproved grants.', 400);
+  });
+
   app.put('/api/admin/settings', (req, res) => {
     const d = parse(
       z.object({

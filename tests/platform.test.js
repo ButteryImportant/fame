@@ -163,3 +163,137 @@ test('Community doubts, rich personality profiles, and shareable public handles 
   assert.equal(threadRes.body.replies[0].author_handle, bobUser.handle);
 }));
 
+test('Pre-approved emails automatically receive Silver course access immediately upon signup', () => run('demo', async f => {
+  const preapprovedEmail = 'amitkpatra29@gmail.com';
+
+  // 1. Seed preapproved grant
+  f.db.prepare(
+    "INSERT INTO preapproved_grants(id, email, course_id, created_at) VALUES(?, ?, 'blueprint', ?)"
+  ).run(randomUUID(), preapprovedEmail, Date.now());
+
+  // 2. If user tries to login before registering, they get a helpful message
+  const visitor = f.client();
+  await visitor.call('/session');
+  const loginAttempt = await visitor.call('/auth/login', 'POST', { email: preapprovedEmail, password: 'password123456' });
+  assert.equal(loginAttempt.status, 401);
+  assert.ok(loginAttempt.body.error.includes('pre-approved'));
+
+  // 3. User registers for the very first time
+  const regRes = await visitor.call('/auth/register', 'POST', {
+    name: 'Amit Patra',
+    email: preapprovedEmail,
+    password: testPassword,
+  });
+  assert.equal(regRes.status, 201);
+  assert.ok(regRes.body.user);
+  assert.equal(regRes.body.user.email, preapprovedEmail);
+  assert.equal(regRes.body.user.verified, true);
+
+  // 4. Verify that preapproved_grants is now claimed
+  const grantRow = f.db.prepare('SELECT * FROM preapproved_grants WHERE email=?').get(preapprovedEmail);
+  assert.ok(grantRow.claimed_at);
+  assert.equal(grantRow.claimed_by_user_id, regRes.body.user.id);
+
+  // 5. Verify order is captured in database
+  const orderRow = f.db.prepare(
+    "SELECT * FROM orders WHERE user_id=? AND course_id='blueprint' AND status='captured'"
+  ).get(regRes.body.user.id);
+  assert.ok(orderRow);
+  assert.ok(orderRow.provider_order_id.startsWith('pregrant_'));
+
+  // 6. User opens dashboard and course is immediately enrolled
+  const dashRes = await visitor.call('/dashboard');
+  assert.equal(dashRes.status, 200);
+  assert.equal(dashRes.body.courses.length, 1);
+  assert.equal(dashRes.body.courses[0].id, 'blueprint');
+
+  // 7. User can immediately open a lesson
+  const lessonRes = await visitor.call('/learn/blueprint/blueprint-1');
+  assert.equal(lessonRes.status, 200);
+
+  // 8. Public course page reflects hasAccess = true
+  const courseRes = await visitor.call('/courses/food-business-blueprint');
+  assert.equal(courseRes.status, 200);
+  assert.equal(courseRes.body.hasAccess, true);
+}));
+
+test('Owner can manage accounts, edit credentials, delete users, and manage preapproved grants', () => run('demo', async (f) => {
+  const admin = f.client();
+  await admin.call('/session');
+  await admin.call('/auth/login', 'POST', { email: 'manmath', password: 'manmath' });
+
+  // 1. Query users list
+  const listRes = await admin.call('/admin/users');
+  assert.equal(listRes.status, 200);
+  assert.ok(Array.isArray(listRes.body.users));
+  assert.ok(listRes.body.users.some((u) => u.email === 'manmath'));
+
+  // 2. Create a new user manually with course grant
+  const createRes = await admin.call('/admin/users', 'POST', {
+    name: 'Directory Student',
+    email: 'directorystudent@example.com',
+    password: 'customPassword123!',
+    role: 'student',
+    verified: true,
+    courseId: 'blueprint',
+  });
+  assert.equal(createRes.status, 201);
+  assert.ok(createRes.body.user);
+  const createdUserId = createRes.body.user.id;
+  assert.equal(createRes.body.user.email, 'directorystudent@example.com');
+  assert.equal(createRes.body.user.verified, true);
+
+  // 3. Verify user shows up in users list with enrolled course
+  const updatedListRes = await admin.call('/admin/users');
+  const foundUser = updatedListRes.body.users.find((u) => u.id === createdUserId);
+  assert.ok(foundUser);
+  assert.equal(foundUser.courses.length, 1);
+  assert.equal(foundUser.courses[0].id, 'blueprint');
+
+  // 4. Update user details
+  const updateRes = await admin.call(`/admin/users/${createdUserId}`, 'PUT', {
+    name: 'Directory Student Renamed',
+    verified: false,
+  });
+  assert.equal(updateRes.status, 200);
+  assert.equal(updateRes.body.user.name, 'Directory Student Renamed');
+  assert.equal(updateRes.body.user.verified, false);
+
+  // 5. Verify admin cannot delete their own account
+  const meRes = await admin.call('/session');
+  assert.ok(meRes.body.user);
+  const selfDeleteRes = await admin.call(`/admin/users/${meRes.body.user.id}`, 'DELETE');
+  assert.equal(selfDeleteRes.status, 400);
+  assert.ok(selfDeleteRes.body.error.includes('own active owner account'));
+
+  // 6. Delete the created user
+  const deleteRes = await admin.call(`/admin/users/${createdUserId}`, 'DELETE');
+  assert.equal(deleteRes.status, 200);
+  assert.ok(deleteRes.body.ok);
+
+  // Verify user is gone from DB
+  const deletedDbUser = f.db.prepare('SELECT * FROM users WHERE id=?').get(createdUserId);
+  assert.equal(deletedDbUser, undefined);
+  const deletedOrders = f.db.prepare('SELECT * FROM orders WHERE user_id=?').all(createdUserId);
+  assert.equal(deletedOrders.length, 0);
+
+  // 7. Test Preapproved Grants API
+  f.db.prepare(
+    "INSERT INTO preapproved_grants(id, email, course_id, created_at) VALUES(?, 'pregrant1@example.com', 'blueprint', ?)"
+  ).run(randomUUID(), Date.now());
+
+  const grantsRes = await admin.call('/admin/preapproved');
+  assert.equal(grantsRes.status, 200);
+  assert.ok(grantsRes.body.grants.some((g) => g.email === 'pregrant1@example.com'));
+
+  // Clear all preapproved grants
+  const clearRes = await admin.call('/admin/preapproved', 'DELETE', { all: true });
+  assert.equal(clearRes.status, 200);
+  assert.ok(clearRes.body.ok);
+
+  const grantsAfter = f.db.prepare('SELECT count(*) as c FROM preapproved_grants').get();
+  assert.equal(grantsAfter.c, 0);
+}));
+
+
+

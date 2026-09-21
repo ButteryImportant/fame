@@ -28,6 +28,8 @@ export function openDatabase(filename) {
     CREATE TABLE IF NOT EXISTS community_replies(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,body TEXT NOT NULL,is_solution INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_community_replies_post ON community_replies(post_id,created_at ASC);
     CREATE TABLE IF NOT EXISTS community_upvotes(user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,created_at INTEGER NOT NULL,PRIMARY KEY(user_id,post_id));
+    CREATE TABLE IF NOT EXISTS preapproved_grants(id TEXT PRIMARY KEY,email TEXT NOT NULL,course_id TEXT NOT NULL,created_at INTEGER NOT NULL,claimed_at INTEGER,claimed_by_user_id TEXT,UNIQUE(email,course_id));
+    CREATE INDEX IF NOT EXISTS idx_preapproved_email ON preapproved_grants(email);
     PRAGMA user_version=2;`);
   seed(db);
   return db;

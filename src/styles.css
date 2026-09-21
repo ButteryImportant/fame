@@ -2013,4 +2013,246 @@
   white-space: nowrap;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   OWNER DASHBOARD: ACCOUNTS & EMAIL DB DIRECTORY
+══════════════════════════════════════════════════════════════════════════════ */
+.accounts-directory-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 26px 28px;
+  margin-bottom: 35px;
+  box-shadow: 0 4px 18px rgba(18, 55, 36, 0.03);
+}
+[data-theme="dark"] .accounts-directory-card {
+  background: #0c211a;
+  border-color: #183d31;
+}
+.accounts-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.accounts-stat-box {
+  background: #fafcfb;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+[data-theme="dark"] .accounts-stat-box {
+  background: #0a1c17;
+  border-color: #1a4235;
+}
+.accounts-stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: #eef7f1;
+  color: var(--green);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .accounts-stat-icon {
+  background: #163629;
+  color: #7ce5a7;
+}
+.accounts-stat-data strong {
+  display: block;
+  font-family: Manrope, sans-serif;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.accounts-stat-data span {
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.accounts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.accounts-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.accounts-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.accounts-select {
+  padding: 9px 12px !important;
+  font-size: 0.82rem !important;
+  border-radius: 7px !important;
+  width: auto !important;
+  min-width: 140px;
+  margin: 0 !important;
+}
+.account-user-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.account-user-name {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-user-email {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: monospace;
+}
+.email-copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  transition: all 0.15s;
+}
+.email-copy-btn:hover {
+  background: var(--soft);
+  color: var(--green);
+}
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.role-badge.student {
+  background: #eef2f6;
+  color: #315277;
+}
+[data-theme="dark"] .role-badge.student {
+  background: #18283a;
+  color: #8cb4df;
+}
+.role-badge.admin {
+  background: #f3eafd;
+  color: #69299e;
+}
+[data-theme="dark"] .role-badge.admin {
+  background: #31154c;
+  color: #cda4fa;
+}
+.verified-badge-btn {
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s;
+}
+.verified-badge-btn.verified {
+  background: #eaf6ee;
+  color: #246838;
+  border-color: #c9e9d1;
+}
+[data-theme="dark"] .verified-badge-btn.verified {
+  background: #11341c;
+  color: #79e399;
+  border-color: #1f5731;
+}
+.verified-badge-btn.unverified {
+  background: #fef7ea;
+  color: #965d18;
+  border-color: #f7e0bc;
+}
+[data-theme="dark"] .verified-badge-btn.unverified {
+  background: #39240d;
+  color: #f4be77;
+  border-color: #634015;
+}
+.courses-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.course-enrolled-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #f0f7f3;
+  color: var(--green);
+  border: 1px solid #d5ebdc;
+}
+[data-theme="dark"] .course-enrolled-tag {
+  background: #143528;
+  color: #7ce5a7;
+  border-color: #1d4d3a;
+}
+.account-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-action-buttons .button {
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.danger-action-btn {
+  color: #b03636 !important;
+  border-color: #f3c2c2 !important;
+}
+.danger-action-btn:hover {
+  background: #fdf2f2 !important;
+  border-color: #e58d8d !important;
+}
+[data-theme="dark"] .danger-action-btn {
+  color: #f48a8a !important;
+  border-color: #552424 !important;
+}
+[data-theme="dark"] .danger-action-btn:hover {
+  background: #381515 !important;
+}
+.preapproved-section {
+  margin-top: 45px;
+  padding-top: 30px;
+  border-top: 1px solid var(--line);
+}
+
+
 
