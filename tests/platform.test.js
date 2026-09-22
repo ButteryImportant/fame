@@ -295,5 +295,37 @@ test('Owner can manage accounts, edit credentials, delete users, and manage prea
   assert.equal(grantsAfter.c, 0);
 }));
 
+test('Community enrolled members endpoint returns members with valid handles and calculated progress bars', () => run('demo', async f => {
+  const learner = f.client();
+  const u = await learner.register();
+  f.db.prepare("UPDATE users SET name='Ravi Shankar' WHERE id=?").run(u.id);
 
+  // Enrol in blueprint
+  const o = (await learner.call('/payments/order', 'POST', { courseId: 'blueprint' })).body;
+  await learner.call('/payments/demo-complete', 'POST', { orderId: o.orderId });
 
+  // Complete 3 lessons
+  await learner.call('/progress/blueprint-1', 'PUT', { completed: true });
+  await learner.call('/progress/blueprint-2', 'PUT', { completed: true });
+  await learner.call('/progress/blueprint-3', 'PUT', { completed: true });
+
+  // Call /community/members
+  const res = await learner.call('/community/members');
+  assert.equal(res.status, 200);
+  assert.ok(res.body.members.length >= 1);
+  const found = res.body.members.find(m => m.id === u.id);
+  assert.ok(found);
+  assert.equal(found.name, 'Ravi Shankar');
+  assert.ok(found.handle);
+  assert.equal(found.enrolled_courses.length, 1);
+  assert.equal(found.enrolled_courses[0].completedCount, 3);
+  assert.ok(found.enrolled_courses[0].percent > 0);
+  assert.equal(found.totalCompleted, 3);
+
+  // Test /u/:handle returns progress
+  const profRes = await learner.call(`/u/${found.handle}`);
+  assert.equal(profRes.status, 200);
+  assert.ok(profRes.body.enrolledCourses.length >= 1);
+  assert.equal(profRes.body.enrolledCourses[0].completedCount, 3);
+  assert.equal(profRes.body.progress.totalCompleted, 3);
+}));

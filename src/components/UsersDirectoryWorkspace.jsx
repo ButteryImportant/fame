@@ -17,6 +17,7 @@ import {
   X,
   RefreshCw,
   BookOpen,
+  ExternalLink,
 } from 'lucide-react';
 import { api, money } from '../api';
 import { Notice } from './shared';
@@ -306,6 +307,18 @@ export function UsersDirectoryWorkspace({
                               YOU
                             </span>
                           )}
+                          {u.handle && (
+                            <a
+                              href={`/u/${u.handle}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="account-handle-link"
+                              title={`View public profile @${u.handle}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '.74rem', color: 'var(--green)', textDecoration: 'none', marginLeft: '6px' }}
+                            >
+                              @{u.handle} <ExternalLink size={10} />
+                            </a>
+                          )}
                         </span>
                         <span className="account-user-email">
                           {u.email}
@@ -339,11 +352,24 @@ export function UsersDirectoryWorkspace({
                     </td>
                     <td>
                       {u.courses && u.courses.length > 0 ? (
-                        <div className="courses-tag-list">
+                        <div className="courses-tag-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {u.courses.map((c) => (
-                            <span key={c.id} className="course-enrolled-tag" title={c.title}>
-                              {c.eyebrow ? `${c.eyebrow} · ` : ''}{c.title}
-                            </span>
+                            <div key={c.id} className="owner-course-progress-box" style={{ background: '#f8faf9', border: '1px solid #e1e9e4', borderRadius: '6px', padding: '6px 9px', minWidth: '170px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', fontSize: '.75rem' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '125px' }} title={c.title}>
+                                  {c.eyebrow ? `${c.eyebrow}` : c.title}
+                                </span>
+                                <span style={{ fontWeight: 700, fontSize: '.72rem', color: (c.percent === 100 ? '#15803d' : 'var(--green)') }}>
+                                  {c.percent || 0}%
+                                </span>
+                              </div>
+                              <div style={{ height: '4px', background: '#e0ece5', borderRadius: '4px', overflow: 'hidden', marginTop: '4px' }}>
+                                <div style={{ height: '100%', background: (c.percent === 100 ? '#16a34a' : 'var(--green)'), width: `${Math.min(100, Math.max(0, c.percent || 0))}%`, borderRadius: '4px' }} />
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.65rem', color: 'var(--muted)', marginTop: '3px' }}>
+                                <span>{c.completedCount || 0}/{c.lessonCount || 0} lessons</span>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       ) : (

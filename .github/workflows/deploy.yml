@@ -26,22 +26,7 @@ jobs:
 
             if [ ! -f .env ]; then
               cp .env.example .env
-            else
-              grep -q '^NODE_ENV=' .env && sed -i 's/^NODE_ENV=.*/NODE_ENV=production/' .env || echo 'NODE_ENV=production' >> .env
-              grep -q '^APP_ORIGIN=' .env && sed -i 's|^APP_ORIGIN=.*|APP_ORIGIN=https://foodbusinesscoach.online|' .env || echo 'APP_ORIGIN=https://foodbusinesscoach.online' >> .env
-              grep -q '^TRUST_PROXY_HOPS=' .env && sed -i 's/^TRUST_PROXY_HOPS=.*/TRUST_PROXY_HOPS=1/' .env || echo 'TRUST_PROXY_HOPS=1' >> .env
-              grep -q '^PAYMENT_MODE=' .env && sed -i 's/^PAYMENT_MODE=.*/PAYMENT_MODE=razorpay/' .env || echo 'PAYMENT_MODE=razorpay' >> .env
-              grep -q '^RAZORPAY_KEY_ID=' .env && sed -i 's/^RAZORPAY_KEY_ID=.*/RAZORPAY_KEY_ID=rzp_live_TeG8WxROxea4pV/' .env || echo 'RAZORPAY_KEY_ID=rzp_live_TeG8WxROxea4pV' >> .env
-              grep -q '^RAZORPAY_KEY_SECRET=' .env && sed -i 's/^RAZORPAY_KEY_SECRET=.*/RAZORPAY_KEY_SECRET=r3M83t9ByHljABLI2jTWNViK/' .env || echo 'RAZORPAY_KEY_SECRET=r3M83t9ByHljABLI2jTWNViK' >> .env
-              grep -q '^RAZORPAY_WEBHOOK_SECRET=' .env && sed -i 's/^RAZORPAY_WEBHOOK_SECRET=.*/RAZORPAY_WEBHOOK_SECRET=cb261479c3285d05ff0ae5d7d65a020b3abaa85962b7d1b2/' .env || echo 'RAZORPAY_WEBHOOK_SECRET=cb261479c3285d05ff0ae5d7d65a020b3abaa85962b7d1b2' >> .env
-              grep -q '^SMTP_HOST=' .env && sed -i 's/^SMTP_HOST=.*/SMTP_HOST=smtp-relay.brevo.com/' .env || echo 'SMTP_HOST=smtp-relay.brevo.com' >> .env
-              grep -q '^SMTP_PORT=' .env && sed -i 's/^SMTP_PORT=.*/SMTP_PORT=587/' .env || echo 'SMTP_PORT=587' >> .env
-              grep -q '^SMTP_SECURE=' .env && sed -i 's/^SMTP_SECURE=.*/SMTP_SECURE=false/' .env || echo 'SMTP_SECURE=false' >> .env
-              grep -q '^SMTP_USER=' .env && sed -i 's/^SMTP_USER=.*/SMTP_USER=ba30b0001@smtp-brevo.com/' .env || echo 'SMTP_USER=ba30b0001@smtp-brevo.com' >> .env
-              BREVO_KEY=$(echo eHNtdHBzaWItYWYwYjU2MDBhNjMwZmM3MGE2ZDBmZWViYWE0MWUxNDdkYzZjZDQ3NWYzZDlhNDFiOTRkOGRhZjQ4ZDg1M2FjOS1adFQxemVDbm5ydFVtTG1p | base64 -d)
-              grep -q '^SMTP_PASS=' .env && sed -i "s/^SMTP_PASS=.*/SMTP_PASS=$BREVO_KEY/" .env || echo "SMTP_PASS=$BREVO_KEY" >> .env
-              grep -q '^MAIL_FROM=' .env && sed -i 's/^MAIL_FROM=.*/MAIL_FROM="FAME <support@foodbusinesscoach.online>"/' .env || echo 'MAIL_FROM="FAME <support@foodbusinesscoach.online>"' >> .env
-              grep -q '^SUPPORT_EMAIL=' .env && sed -i 's/^SUPPORT_EMAIL=.*/SUPPORT_EMAIL=support@foodbusinesscoach.online/' .env || echo 'SUPPORT_EMAIL=support@foodbusinesscoach.online' >> .env
+              echo "Created initial .env from template."
             fi
 
             docker compose build

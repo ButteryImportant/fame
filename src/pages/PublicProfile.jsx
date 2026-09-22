@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { 
   Share2, Check, MapPin, Calendar, Globe, Linkedin, 
   Instagram, Twitter, Award, MessageSquare, ThumbsUp, 
-  CheckCircle2, ArrowRight, ShieldCheck, Sparkles, AlertCircle, Edit3
+  CheckCircle2, ArrowRight, ShieldCheck, Sparkles, AlertCircle, Edit3,
+  GraduationCap
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
@@ -92,7 +93,7 @@ export function PublicProfile() {
     );
   }
 
-  const { profile, badges, stats, recentPosts } = profileData;
+  const { profile, badges, stats, recentPosts, enrolledCourses = [], progress = {} } = profileData;
   const isOwnProfile = user && user.id === profile.user_id;
 
   return (
@@ -267,6 +268,56 @@ export function PublicProfile() {
                   </p>
                 )}
               </div>
+
+              {/* Enrolled Programmes & Course Progress Card */}
+              {enrolledCourses && enrolledCourses.length > 0 && (
+                <div className="profile-info-card profile-progress-card" style={{ gridColumn: '1 / -1' }}>
+                  <div className="profile-card-title-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                      <GraduationCap size={20} style={{ color: 'var(--green)' }} />
+                      <span>Enrolled Programmes &amp; Progress</span>
+                    </h3>
+                    {progress && progress.totalLessons > 0 && (
+                      <span className="overall-progress-pill" style={{ background: '#eef6f2', color: 'var(--green)', padding: '4px 12px', borderRadius: '20px', fontWeight: 700, fontSize: '.78rem' }}>
+                        {progress.percent}% Overall Curriculum Complete
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="profile-courses-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                    {enrolledCourses.map(c => (
+                      <div key={c.id} className="profile-course-item" style={{ background: '#fcfdfd', border: '1px solid var(--line)', borderRadius: '10px', padding: '18px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                          <div>
+                            <span className="badge category-badge small">{c.eyebrow || 'Programme'}</span>
+                            <h4 style={{ margin: '6px 0 0', fontSize: '1.05rem', fontWeight: 650 }}>{c.title}</h4>
+                          </div>
+                          <span className="course-progress-badge" style={{ background: '#e6f4ea', color: '#137333', fontWeight: 700, fontSize: '.76rem', padding: '3px 8px', borderRadius: '4px' }}>
+                            {c.percent}%
+                          </span>
+                        </div>
+
+                        <div className="course-progress-track" style={{ height: '7px', background: '#e5ede8', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px' }}>
+                          <div 
+                            className="course-progress-fill" 
+                            style={{ height: '100%', background: 'var(--green)', borderRadius: '5px', width: `${Math.min(100, Math.max(0, c.percent))}%` }} 
+                            title={`${c.completedCount} of ${c.lessonCount} lessons completed`}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.76rem', color: 'var(--muted)' }}>
+                          <span>{c.completedCount} of {c.lessonCount} lessons completed</span>
+                          {c.percent === 100 && (
+                            <span style={{ color: '#137333', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                              <CheckCircle2 size={12} /> 100% Completed
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>

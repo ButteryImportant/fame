@@ -844,6 +844,38 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
 
     const repliesCount = db.prepare('SELECT count(*) AS n FROM community_replies WHERE user_id=?').get(profile.user_id).n;
 
+    // Fetch enrolled courses and progress
+    const enrolledCourses = db.prepare(`
+      SELECT DISTINCT c.id, c.title, c.eyebrow, c.level, c.accent, c.slug, c.position
+      FROM courses c
+      JOIN orders o ON o.course_id = c.id
+      WHERE o.user_id = ? AND (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
+      ORDER BY c.position ASC
+    `).all(profile.user_id).map(c => {
+      const lessonCount = db.prepare('SELECT count(*) AS n FROM lessons WHERE course_id=?').get(c.id).n;
+      const completedCount = db.prepare(`
+        SELECT count(*) AS n FROM progress p
+        JOIN lessons l ON l.id = p.lesson_id
+        WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
+      `).get(profile.user_id, c.id).n;
+      const percent = lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0;
+      return {
+        id: c.id,
+        title: c.title,
+        eyebrow: c.eyebrow,
+        level: c.level,
+        accent: c.accent,
+        slug: c.slug,
+        lessonCount,
+        completedCount,
+        percent,
+      };
+    });
+
+    const totalLessons = enrolledCourses.reduce((sum, c) => sum + c.lessonCount, 0);
+    const totalCompleted = enrolledCourses.reduce((sum, c) => sum + c.completedCount, 0);
+    const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+
     res.json({
       profile,
       badges,
@@ -852,7 +884,115 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         repliesCount,
       },
       recentPosts,
+      enrolledCourses,
+      progress: {
+        totalLessons,
+        totalCompleted,
+        percent: overallPercent,
+      },
     });
+  });
+
+  // ─── COMMUNITY ENROLLED MEMBERS & PROGRESS ────────────────────────────────
+  app.get('/api/community/members', (req, res) => {
+    const { search, courseId, sort = 'recent' } = req.query;
+
+    // Get all enrolled users (plus admin/mentor)
+    const rawMembers = db.prepare(`
+      SELECT DISTINCT u.id, u.name, u.email, u.role, u.created_at
+      FROM users u
+      WHERE u.role = 'admin' OR u.id IN (
+        SELECT o.user_id FROM orders o
+        WHERE (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
+      )
+      ORDER BY (CASE WHEN u.role = 'admin' THEN 0 ELSE 1 END), u.created_at DESC
+    `).all();
+
+    const lessonCounts = Object.fromEntries(
+      db.prepare('SELECT course_id, count(*) AS n FROM lessons GROUP BY course_id')
+        .all()
+        .map(r => [r.course_id, r.n])
+    );
+
+    const members = [];
+    for (const u of rawMembers) {
+      const profile = ensureUserProfile(u);
+
+      // Fetch enrolments for this user
+      const enrolledCourses = db.prepare(`
+        SELECT DISTINCT c.id, c.title, c.eyebrow, c.level, c.accent, c.slug, c.position, o.created_at AS enrolled_at
+        FROM courses c
+        JOIN orders o ON o.course_id = c.id
+        WHERE o.user_id = ? AND (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
+        ORDER BY c.position ASC
+      `).all(u.id).map(c => {
+        const total = lessonCounts[c.id] || 0;
+        const completed = db.prepare(`
+          SELECT count(*) AS n FROM progress p
+          JOIN lessons l ON l.id = p.lesson_id
+          WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
+        `).get(u.id, c.id).n;
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return {
+          id: c.id,
+          title: c.title,
+          eyebrow: c.eyebrow,
+          level: c.level,
+          accent: c.accent,
+          slug: c.slug,
+          enrolled_at: c.enrolled_at,
+          lessonCount: total,
+          completedCount: completed,
+          percent,
+        };
+      });
+
+      const totalLessons = enrolledCourses.reduce((acc, c) => acc + c.lessonCount, 0);
+      const totalCompleted = enrolledCourses.reduce((acc, c) => acc + c.completedCount, 0);
+      const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+
+      // Filter by courseId if requested
+      if (courseId && courseId !== 'all') {
+        const hasCourse = enrolledCourses.some(c => c.id === courseId);
+        if (!hasCourse && u.role !== 'admin') continue;
+      }
+
+      // Filter by search query if requested
+      if (search && search.trim()) {
+        const q = search.trim().toLowerCase();
+        const matchName = u.name?.toLowerCase().includes(q);
+        const matchHandle = profile.handle?.toLowerCase().includes(q);
+        const matchHeadline = profile.headline?.toLowerCase().includes(q);
+        const matchCourse = enrolledCourses.some(
+          c => c.title?.toLowerCase().includes(q) || c.eyebrow?.toLowerCase().includes(q)
+        );
+        if (!matchName && !matchHandle && !matchHeadline && !matchCourse) continue;
+      }
+
+      members.push({
+        id: u.id,
+        name: u.name,
+        handle: profile.handle,
+        avatar: profile.avatar || '',
+        headline: profile.headline || '',
+        location: profile.location || '',
+        business_stage: profile.business_stage || 'Idea Phase',
+        role: u.role,
+        member_since: u.created_at,
+        enrolled_courses: enrolledCourses,
+        totalLessons,
+        totalCompleted,
+        overallPercent,
+      });
+    }
+
+    if (sort === 'progress') {
+      members.sort((a, b) => b.overallPercent - a.overallPercent);
+    } else if (sort === 'alphabetical') {
+      members.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    res.json({ members, total: members.length });
   });
 
   // ─── COMMUNITY DOUBTS & DISCUSSIONS ENDPOINTS ──────────────────────────────
@@ -1355,9 +1495,19 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       )
       .all();
 
+    const lessonCounts = Object.fromEntries(
+      db.prepare('SELECT course_id, count(*) AS n FROM lessons GROUP BY course_id').all().map(r => [r.course_id, r.n])
+    );
+
     const userCoursesMap = {};
     for (const e of enrollments) {
       if (!userCoursesMap[e.user_id]) userCoursesMap[e.user_id] = [];
+      const total = lessonCounts[e.course_id] || 0;
+      const completed = db.prepare(
+        'SELECT count(*) AS n FROM progress p JOIN lessons l ON l.id=p.lesson_id WHERE p.user_id=? AND l.course_id=? AND p.completed=1'
+      ).get(e.user_id, e.course_id).n;
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
       userCoursesMap[e.user_id].push({
         id: e.course_id,
         title: e.course_title,
@@ -1366,21 +1516,34 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         slug: e.slug,
         status: e.status,
         enrolled_at: e.enrolled_at,
+        lessonCount: total,
+        completedCount: completed,
+        percent,
       });
     }
 
-    const users = rawUsers.map((u) => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      verified: !!u.verified,
-      created_at: u.created_at,
-      handle: u.handle || null,
-      avatar: u.avatar || null,
-      headline: u.headline || null,
-      courses: userCoursesMap[u.id] || [],
-    }));
+    const users = rawUsers.map((u) => {
+      const userCourses = userCoursesMap[u.id] || [];
+      const totalLessons = userCourses.reduce((acc, c) => acc + c.lessonCount, 0);
+      const totalCompleted = userCourses.reduce((acc, c) => acc + c.completedCount, 0);
+      const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        verified: !!u.verified,
+        created_at: u.created_at,
+        handle: u.handle || null,
+        avatar: u.avatar || null,
+        headline: u.headline || null,
+        courses: userCourses,
+        totalLessons,
+        totalCompleted,
+        overallPercent,
+      };
+    });
 
     res.json({ users });
   });
