@@ -213,7 +213,7 @@ export function Community() {
                   className={`button ${activeTab === 'members' ? 'outline light' : 'outline light'}`}
                   onClick={() => setActiveTab(activeTab === 'members' ? 'doubts' : 'members')}
                 >
-                  <Users size={18} /> {activeTab === 'members' ? 'View Doubts & Feed' : 'Enrolled Members & Progress'}
+                  <Users size={18} /> {activeTab === 'members' ? 'View Doubts & Feed' : 'Enrolled Members'}
                 </button>
                 {user && (
                   <Link to={`/u/${user.handle || 'me'}`} className="button outline light">
@@ -242,7 +242,7 @@ export function Community() {
               onClick={() => setActiveTab('members')}
             >
               <Users size={17} />
-              <span>Enrolled Founders &amp; Progress</span>
+              <span>Enrolled Founders</span>
               <span className="tab-pill">{members.length}</span>
             </button>
           </div>
@@ -447,7 +447,6 @@ export function Community() {
                       className="member-select"
                     >
                       <option value="recent">Recently Joined</option>
-                      <option value="progress">Highest Progress</option>
                       <option value="alphabetical">Name (A-Z)</option>
                     </select>
                   </label>
@@ -458,7 +457,7 @@ export function Community() {
               {loadingMembers ? (
                 <div className="community-loading">
                   <Loader />
-                  <p>Loading enrolled members &amp; progress...</p>
+                  <p>Loading enrolled members...</p>
                 </div>
               ) : members.length === 0 ? (
                 <div className="community-empty">
@@ -528,43 +527,19 @@ export function Community() {
                           </span>
                         </div>
 
-                        {/* Course Progress Section */}
-                        <div className="member-progress-section">
-                          <div className="progress-section-title">
+                        {/* Enrolled Programmes Badges */}
+                        <div className="member-courses-section">
+                          <div className="courses-section-title">
                             <GraduationCap size={15} />
-                            <span>Course Progress &amp; Journey</span>
+                            <span>Enrolled Programmes</span>
                           </div>
 
                           {m.enrolled_courses && m.enrolled_courses.length > 0 ? (
-                            <div className="member-courses-progress-list">
+                            <div className="member-enrolled-badges">
                               {m.enrolled_courses.map(c => (
-                                <div key={c.id} className="course-progress-item">
-                                  <div className="course-progress-label-row">
-                                    <span className="course-title-sub" title={c.title}>
-                                      {c.eyebrow ? `${c.eyebrow} · ` : ''}{c.title}
-                                    </span>
-                                    <span className="course-progress-badge">
-                                      {c.percent}%
-                                    </span>
-                                  </div>
-
-                                  <div className="course-progress-track">
-                                    <div 
-                                      className="course-progress-fill" 
-                                      style={{ width: `${Math.min(100, Math.max(0, c.percent))}%` }}
-                                      title={`${c.completedCount} of ${c.lessonCount} lessons completed (${c.percent}%)`}
-                                    />
-                                  </div>
-
-                                  <div className="course-progress-detail-row">
-                                    <span>{c.completedCount} of {c.lessonCount} lessons completed</span>
-                                    {c.percent === 100 && (
-                                      <span className="completed-badge">
-                                        <CheckCircle2 size={11} /> Completed
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
+                                <span key={c.id} className="member-programme-badge" title={c.title}>
+                                  {c.eyebrow ? `${c.eyebrow} · ` : ''}{c.title}
+                                </span>
                               ))}
                             </div>
                           ) : m.role === 'admin' ? (

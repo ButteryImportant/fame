@@ -295,7 +295,7 @@ test('Owner can manage accounts, edit credentials, delete users, and manage prea
   assert.equal(grantsAfter.c, 0);
 }));
 
-test('Community enrolled members endpoint returns members with valid handles and calculated progress bars', () => run('demo', async f => {
+test('Community enrolled members endpoint shows only enrolled members; progress is restricted to owner and self', () => run('demo', async f => {
   const learner = f.client();
   const u = await learner.register();
   f.db.prepare("UPDATE users SET name='Ravi Shankar' WHERE id=?").run(u.id);
@@ -309,7 +309,7 @@ test('Community enrolled members endpoint returns members with valid handles and
   await learner.call('/progress/blueprint-2', 'PUT', { completed: true });
   await learner.call('/progress/blueprint-3', 'PUT', { completed: true });
 
-  // Call /community/members
+  // 1. Public / learner call to /community/members: returns enrolled learner without public progress
   const res = await learner.call('/community/members');
   assert.equal(res.status, 200);
   assert.ok(res.body.members.length >= 1);
@@ -318,14 +318,42 @@ test('Community enrolled members endpoint returns members with valid handles and
   assert.equal(found.name, 'Ravi Shankar');
   assert.ok(found.handle);
   assert.equal(found.enrolled_courses.length, 1);
-  assert.equal(found.enrolled_courses[0].completedCount, 3);
-  assert.ok(found.enrolled_courses[0].percent > 0);
-  assert.equal(found.totalCompleted, 3);
+  assert.equal(found.enrolled_courses[0].title, 'Food Business Blueprint');
+  assert.equal(found.enrolled_courses[0].completedCount, undefined);
+  assert.equal(found.totalCompleted, undefined);
 
-  // Test /u/:handle returns progress
-  const profRes = await learner.call(`/u/${found.handle}`);
-  assert.equal(profRes.status, 200);
-  assert.ok(profRes.body.enrolledCourses.length >= 1);
-  assert.equal(profRes.body.enrolledCourses[0].completedCount, 3);
-  assert.equal(profRes.body.progress.totalCompleted, 3);
+  // 2. Owner / admin call to /community/members: includes progress metrics
+  const admin = f.client();
+  await admin.call('/session');
+  await admin.call('/auth/login', 'POST', { email: 'manmath', password: 'manmath' });
+
+  const adminCommunityRes = await admin.call('/community/members');
+  assert.equal(adminCommunityRes.status, 200);
+  const adminFound = adminCommunityRes.body.members.find(m => m.id === u.id);
+  assert.ok(adminFound);
+  assert.equal(adminFound.enrolled_courses[0].completedCount, 3);
+  assert.ok(adminFound.enrolled_courses[0].percent > 0);
+  assert.equal(adminFound.totalCompleted, 3);
+
+  // 3. Owner call to /admin/enrolments: includes progress metrics
+  const adminEnrolmentsRes = await admin.call('/admin/enrolments');
+  assert.equal(adminEnrolmentsRes.status, 200);
+  const enrolmentFound = adminEnrolmentsRes.body.enrolments.find(e => e.user_id === u.id);
+  assert.ok(enrolmentFound);
+  assert.equal(enrolmentFound.completedCount, 3);
+  assert.ok(enrolmentFound.percent > 0);
+
+  // 4. Learner visits own profile /u/:handle: returns progress
+  const ownProfRes = await learner.call(`/u/${found.handle}`);
+  assert.equal(ownProfRes.status, 200);
+  assert.ok(ownProfRes.body.enrolledCourses.length >= 1);
+  assert.equal(ownProfRes.body.enrolledCourses[0].completedCount, 3);
+  assert.equal(ownProfRes.body.progress.totalCompleted, 3);
+
+  // 5. Another visitor visits learner profile: progress is omitted
+  const anonymous = f.client();
+  const anonProfRes = await anonymous.call(`/u/${found.handle}`);
+  assert.equal(anonProfRes.status, 200);
+  assert.equal(anonProfRes.body.progress, undefined);
+  assert.equal(anonProfRes.body.enrolledCourses[0].completedCount, undefined);
 }));

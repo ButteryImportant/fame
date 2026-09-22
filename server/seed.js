@@ -211,41 +211,54 @@ const courses = [
     ],
   },
 ];
-export function ensureManmathAdmin(db, targetEmail = 'manmathbiradar@gmail.com') {
+export function ensureManmathAdmin(db, targetEmail = 'manmath') {
   const adminHash =
     'scrypt$fcb1090e03b9a52b8b9f0b5b1687db4b$525d9f150e42973d725b58eece321f579c7853e663f43478497fcb2c621685c059edf6d80f87d8db5ee9133db7a5d5317555390824327a9b1f5ab257e10749c6';
 
-  const emailsToEnsure = ['manmathbiradar@gmail.com', 'manmath'];
-  for (const email of emailsToEnsure) {
-    try {
-      const existing = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email.toLowerCase());
-      if (existing) {
-        db.prepare(
-          "UPDATE users SET name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
-        ).run(adminHash, existing.id);
-      } else {
-        const id = email === 'manmath' ? 'admin-manmath' : 'admin-manmathbiradar';
-        db.prepare(
-          "INSERT OR IGNORE INTO users(id,name,email,password_hash,role,verified,created_at) VALUES(?,'Manmath Biradar',?,?,'admin',1,?)"
-        ).run(id, email, adminHash, Date.now());
+  // 1. Ensure single primary admin account with username 'manmath' and password 'manmath'
+  const existing = db.prepare("SELECT id FROM users WHERE lower(email) = 'manmath'").get();
+  if (existing) {
+    db.prepare(
+      "UPDATE users SET name='Manmath Biradar', password_hash=?, role='admin', verified=1 WHERE id=?"
+    ).run(adminHash, existing.id);
+  } else {
+    db.prepare(
+      "INSERT OR IGNORE INTO users(id,name,email,password_hash,role,verified,created_at) VALUES('admin-manmath','Manmath Biradar','manmath',?,'admin',1,?)"
+    ).run(adminHash, Date.now());
+  }
+
+  const primaryAdmin = db.prepare("SELECT id FROM users WHERE lower(email) = 'manmath'").get();
+
+  // 2. Remove duplicate manmath accounts and merge references
+  if (primaryAdmin) {
+    const duplicates = db.prepare("SELECT id FROM users WHERE lower(email) = 'manmathbiradar@gmail.com' AND id != ?").all(primaryAdmin.id);
+    for (const dup of duplicates) {
+      try {
+        db.prepare("UPDATE OR IGNORE community_posts SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+        db.prepare("UPDATE OR IGNORE community_replies SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+        db.prepare("UPDATE OR IGNORE community_upvotes SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+        db.prepare("UPDATE OR IGNORE orders SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+        db.prepare("UPDATE OR IGNORE progress SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+        db.prepare("UPDATE OR IGNORE sessions SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+
+        const dupProfile = db.prepare("SELECT * FROM profiles WHERE user_id = ?").get(dup.id);
+        if (dupProfile) {
+          db.prepare("DELETE FROM profiles WHERE user_id = ?").run(primaryAdmin.id);
+          db.prepare("UPDATE profiles SET user_id = ? WHERE user_id = ?").run(primaryAdmin.id, dup.id);
+        }
+        db.prepare("DELETE FROM users WHERE id = ?").run(dup.id);
+      } catch (e) {
+        console.error(`Notice merging duplicate admin ${dup.id}:`, e.message);
       }
-    } catch (e) {
-      console.error(`Notice ensuring admin ${email}:`, e.message);
     }
   }
 
-  return (
-    db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(targetEmail.toLowerCase()) ||
-    db.prepare("SELECT * FROM users WHERE lower(email) = 'manmathbiradar@gmail.com'").get() ||
-    db.prepare("SELECT * FROM users WHERE lower(email) = 'manmath'").get() ||
-    db.prepare("SELECT * FROM users WHERE role = 'admin'").get()
-  );
+  return db.prepare("SELECT * FROM users WHERE lower(email) = 'manmath'").get();
 }
 
 export function ensureProfilesAndCommunity(db) {
   try {
     const adminUser =
-      db.prepare("SELECT id FROM users WHERE lower(email) = 'manmathbiradar@gmail.com'").get() ||
       db.prepare("SELECT id FROM users WHERE lower(email) = 'manmath'").get() ||
       db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get();
 

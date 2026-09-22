@@ -1230,6 +1230,7 @@ function LearnerAccessWorkspace({
                 <th>Student / Recipient</th>
                 <th>Course Programme</th>
                 <th>Access Type</th>
+                <th>Curriculum Progress</th>
                 <th>Date Granted</th>
                 <th>Actions</th>
               </tr>
@@ -1265,6 +1266,33 @@ function LearnerAccessWorkspace({
                         <span className="access-type-pill paid">
                           Paid Checkout ({money(e.amount)})
                         </span>
+                      )}
+                    </td>
+                    <td style={{ minWidth: '150px' }}>
+                      {isPreapproved ? (
+                        <span className="muted" style={{ fontSize: '.75rem' }}>Awaiting registration</span>
+                      ) : (
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.75rem', marginBottom: '3px' }}>
+                            <span style={{ fontWeight: 650, color: (e.percent === 100 ? '#15803d' : 'var(--ink)') }}>
+                              {e.percent || 0}% Complete
+                            </span>
+                            <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>
+                              {e.completedCount || 0}/{e.lessonCount || 0}
+                            </span>
+                          </div>
+                          <div style={{ height: '5px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                height: '100%',
+                                background: e.percent === 100 ? '#16a34a' : 'var(--green)',
+                                width: `${Math.min(100, Math.max(0, e.percent || 0))}%`,
+                                borderRadius: '4px',
+                                transition: 'width .2s ease'
+                              }}
+                            />
+                          </div>
+                        </div>
                       )}
                     </td>
                     <td>

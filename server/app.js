@@ -844,7 +844,10 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
 
     const repliesCount = db.prepare('SELECT count(*) AS n FROM community_replies WHERE user_id=?').get(profile.user_id).n;
 
-    // Fetch enrolled courses and progress
+    // Progress is only visible to the owner (admin) or the user viewing their own profile
+    const canViewProgress = !!(req.user && (req.user.role === 'admin' || req.user.id === profile.user_id));
+
+    // Fetch enrolled courses
     const enrolledCourses = db.prepare(`
       SELECT DISTINCT c.id, c.title, c.eyebrow, c.level, c.accent, c.slug, c.position
       FROM courses c
@@ -852,31 +855,30 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       WHERE o.user_id = ? AND (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
       ORDER BY c.position ASC
     `).all(profile.user_id).map(c => {
-      const lessonCount = db.prepare('SELECT count(*) AS n FROM lessons WHERE course_id=?').get(c.id).n;
-      const completedCount = db.prepare(`
-        SELECT count(*) AS n FROM progress p
-        JOIN lessons l ON l.id = p.lesson_id
-        WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
-      `).get(profile.user_id, c.id).n;
-      const percent = lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0;
-      return {
+      const courseObj = {
         id: c.id,
         title: c.title,
         eyebrow: c.eyebrow,
         level: c.level,
         accent: c.accent,
         slug: c.slug,
-        lessonCount,
-        completedCount,
-        percent,
       };
+      if (canViewProgress) {
+        const lessonCount = db.prepare('SELECT count(*) AS n FROM lessons WHERE course_id=?').get(c.id).n;
+        const completedCount = db.prepare(`
+          SELECT count(*) AS n FROM progress p
+          JOIN lessons l ON l.id = p.lesson_id
+          WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
+        `).get(profile.user_id, c.id).n;
+        const percent = lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0;
+        courseObj.lessonCount = lessonCount;
+        courseObj.completedCount = completedCount;
+        courseObj.percent = percent;
+      }
+      return courseObj;
     });
 
-    const totalLessons = enrolledCourses.reduce((sum, c) => sum + c.lessonCount, 0);
-    const totalCompleted = enrolledCourses.reduce((sum, c) => sum + c.completedCount, 0);
-    const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
-
-    res.json({
+    const responsePayload = {
       profile,
       badges,
       stats: {
@@ -885,40 +887,47 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
       },
       recentPosts,
       enrolledCourses,
-      progress: {
+    };
+
+    if (canViewProgress) {
+      const totalLessons = enrolledCourses.reduce((sum, c) => sum + (c.lessonCount || 0), 0);
+      const totalCompleted = enrolledCourses.reduce((sum, c) => sum + (c.completedCount || 0), 0);
+      const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+      responsePayload.progress = {
         totalLessons,
         totalCompleted,
         percent: overallPercent,
-      },
-    });
+      };
+    }
+
+    res.json(responsePayload);
   });
 
-  // ─── COMMUNITY ENROLLED MEMBERS & PROGRESS ────────────────────────────────
+  // ─── COMMUNITY ENROLLED MEMBERS (ONLY ENROLLED LEARNERS) ──────────────────
   app.get('/api/community/members', (req, res) => {
     const { search, courseId, sort = 'recent' } = req.query;
+    const isOwner = !!(req.user && req.user.role === 'admin');
 
-    // Get all enrolled users (plus admin/mentor)
+    // Only select members who are actively enrolled in courses
     const rawMembers = db.prepare(`
       SELECT DISTINCT u.id, u.name, u.email, u.role, u.created_at
       FROM users u
-      WHERE u.role = 'admin' OR u.id IN (
-        SELECT o.user_id FROM orders o
-        WHERE (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
-      )
-      ORDER BY (CASE WHEN u.role = 'admin' THEN 0 ELSE 1 END), u.created_at DESC
+      JOIN orders o ON o.user_id = u.id
+      WHERE (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
+      ORDER BY u.created_at DESC
     `).all();
 
-    const lessonCounts = Object.fromEntries(
+    const lessonCounts = isOwner ? Object.fromEntries(
       db.prepare('SELECT course_id, count(*) AS n FROM lessons GROUP BY course_id')
         .all()
         .map(r => [r.course_id, r.n])
-    );
+    ) : {};
 
     const members = [];
     for (const u of rawMembers) {
       const profile = ensureUserProfile(u);
 
-      // Fetch enrolments for this user
+      // Fetch active enrolments for this user
       const enrolledCourses = db.prepare(`
         SELECT DISTINCT c.id, c.title, c.eyebrow, c.level, c.accent, c.slug, c.position, o.created_at AS enrolled_at
         FROM courses c
@@ -926,14 +935,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         WHERE o.user_id = ? AND (o.status='captured' OR o.status='demo') AND o.refund_amount < o.amount
         ORDER BY c.position ASC
       `).all(u.id).map(c => {
-        const total = lessonCounts[c.id] || 0;
-        const completed = db.prepare(`
-          SELECT count(*) AS n FROM progress p
-          JOIN lessons l ON l.id = p.lesson_id
-          WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
-        `).get(u.id, c.id).n;
-        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-        return {
+        const item = {
           id: c.id,
           title: c.title,
           eyebrow: c.eyebrow,
@@ -941,20 +943,27 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
           accent: c.accent,
           slug: c.slug,
           enrolled_at: c.enrolled_at,
-          lessonCount: total,
-          completedCount: completed,
-          percent,
         };
+        // Progress details are only provided if owner
+        if (isOwner) {
+          const total = lessonCounts[c.id] || 0;
+          const completed = db.prepare(`
+            SELECT count(*) AS n FROM progress p
+            JOIN lessons l ON l.id = p.lesson_id
+            WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
+          `).get(u.id, c.id).n;
+          const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+          item.lessonCount = total;
+          item.completedCount = completed;
+          item.percent = percent;
+        }
+        return item;
       });
-
-      const totalLessons = enrolledCourses.reduce((acc, c) => acc + c.lessonCount, 0);
-      const totalCompleted = enrolledCourses.reduce((acc, c) => acc + c.completedCount, 0);
-      const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
 
       // Filter by courseId if requested
       if (courseId && courseId !== 'all') {
         const hasCourse = enrolledCourses.some(c => c.id === courseId);
-        if (!hasCourse && u.role !== 'admin') continue;
+        if (!hasCourse) continue;
       }
 
       // Filter by search query if requested
@@ -969,7 +978,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         if (!matchName && !matchHandle && !matchHeadline && !matchCourse) continue;
       }
 
-      members.push({
+      const memberObj = {
         id: u.id,
         name: u.name,
         handle: profile.handle,
@@ -980,14 +989,22 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
         role: u.role,
         member_since: u.created_at,
         enrolled_courses: enrolledCourses,
-        totalLessons,
-        totalCompleted,
-        overallPercent,
-      });
+      };
+
+      if (isOwner) {
+        const totalLessons = enrolledCourses.reduce((acc, c) => acc + (c.lessonCount || 0), 0);
+        const totalCompleted = enrolledCourses.reduce((acc, c) => acc + (c.completedCount || 0), 0);
+        const overallPercent = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+        memberObj.totalLessons = totalLessons;
+        memberObj.totalCompleted = totalCompleted;
+        memberObj.overallPercent = overallPercent;
+      }
+
+      members.push(memberObj);
     }
 
-    if (sort === 'progress') {
-      members.sort((a, b) => b.overallPercent - a.overallPercent);
+    if (isOwner && sort === 'progress') {
+      members.sort((a, b) => (b.overallPercent || 0) - (a.overallPercent || 0));
     } else if (sort === 'alphabetical') {
       members.sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -1340,7 +1357,10 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     res.json({ ok: true });
   });
   app.get('/api/admin/enrolments', (_req, res) => {
-    const enrolments = db
+    const lessonCounts = Object.fromEntries(
+      db.prepare('SELECT course_id, count(*) AS n FROM lessons GROUP BY course_id').all().map(r => [r.course_id, r.n])
+    );
+    const rawEnrolments = db
       .prepare(
         `SELECT o.id AS order_id, o.amount, o.status, o.created_at, o.paid_at, o.provider_order_id,
                 u.id AS user_id, u.name AS user_name, u.email AS user_email,
@@ -1359,6 +1379,21 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
          ORDER BY created_at DESC LIMIT 250`
       )
       .all();
+
+    const enrolments = rawEnrolments.map(e => {
+      const total = lessonCounts[e.course_id] || 0;
+      if (!e.user_id) {
+        return { ...e, lessonCount: total, completedCount: 0, percent: 0 };
+      }
+      const completed = db.prepare(`
+        SELECT count(*) AS n FROM progress p
+        JOIN lessons l ON l.id = p.lesson_id
+        WHERE p.user_id = ? AND l.course_id = ? AND p.completed = 1
+      `).get(e.user_id, e.course_id).n;
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+      return { ...e, lessonCount: total, completedCount: completed, percent };
+    });
+
     res.json({ enrolments });
   });
   app.post('/api/admin/enrol', async (req, res) => {
