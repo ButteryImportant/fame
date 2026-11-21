@@ -354,7 +354,7 @@ export function UsersDirectoryWorkspace({
                       {u.courses && u.courses.length > 0 ? (
                         <div className="courses-tag-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {u.courses.map((c) => (
-                            <div key={c.id} className="owner-course-progress-box" style={{ background: '#f8faf9', border: '1px solid #e1e9e4', borderRadius: '6px', padding: '6px 9px', minWidth: '170px' }}>
+                            <div key={c.id} className="owner-course-progress-box" style={{ borderRadius: '6px', padding: '6px 9px', minWidth: '170px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', fontSize: '.75rem' }}>
                                 <span style={{ fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '125px' }} title={c.title}>
                                   {c.eyebrow ? `${c.eyebrow}` : c.title}

@@ -288,7 +288,7 @@ export function PublicProfile() {
                     {enrolledCourses.map(c => {
                       const hasProgress = typeof c.percent === 'number' && typeof c.lessonCount === 'number';
                       return (
-                        <div key={c.id} className="profile-course-item" style={{ background: '#fcfdfd', border: '1px solid var(--line)', borderRadius: '10px', padding: '18px' }}>
+                        <div key={c.id} className="profile-course-item" style={{ borderRadius: '10px', padding: '18px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: hasProgress ? '10px' : '0' }}>
                             <div>
                               <span className="badge category-badge small">{c.eyebrow || 'Programme'}</span>
