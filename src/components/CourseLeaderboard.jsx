@@ -18,6 +18,7 @@ import { api } from '../api';
 export function CourseLeaderboard({
   initialCourseId = 'blueprint',
   liveMembers = [],
+  currentUserCourses = [],
   compact = false,
   onSelectCourse,
 }) {
@@ -33,19 +34,44 @@ export function CourseLeaderboard({
     }
   }, [initialCourseId]);
 
-  // Load real registered members if not passed by parent
+  // Load real registered members with completion data (from /admin/users or /community/members)
   useEffect(() => {
-    if (liveMembers && liveMembers.length > 0) {
-      setActualMembers(liveMembers);
-    } else {
-      api('/community/members')
-        .then((res) => {
-          setActualMembers(res.members || []);
-        })
-        .catch((err) => {
-          console.warn('Could not load live members for leaderboard:', err);
-        });
+    let isMounted = true;
+
+    async function loadMembersWithProgress() {
+      // 1. Try fetching from /admin/users which has the exact same completion stats as Owner Dashboard
+      try {
+        const adminRes = await api('/admin/users');
+        if (isMounted && adminRes?.users && adminRes.users.length > 0) {
+          setActualMembers(adminRes.users);
+          return;
+        }
+      } catch {
+        // Fall back gracefully
+      }
+
+      // 2. If parent passed liveMembers with data, use them
+      if (liveMembers && liveMembers.length > 0) {
+        if (isMounted) setActualMembers(liveMembers);
+        return;
+      }
+
+      // 3. Fallback: fetch from /community/members
+      try {
+        const commRes = await api('/community/members');
+        if (isMounted && commRes?.members) {
+          setActualMembers(commRes.members);
+        }
+      } catch (err) {
+        console.warn('Could not load live members for leaderboard:', err);
+      }
     }
+
+    loadMembersWithProgress();
+
+    return () => {
+      isMounted = false;
+    };
   }, [liveMembers]);
 
   // Listen to live XP updates from video watch timer
@@ -60,7 +86,8 @@ export function CourseLeaderboard({
   const { tierInfo, leaderboard, userRank, userEntry, totalParticipants } = getCourseLeaderboard(
     selectedCourseId,
     user,
-    actualMembers
+    actualMembers,
+    currentUserCourses
   );
 
   const top3 = leaderboard.slice(0, 3);
@@ -101,7 +128,7 @@ export function CourseLeaderboard({
         })}
       </div>
 
-      {/* ─── Current User Live Rank Ribbon ────────────────────────────── */}
+      {/* ─── Current User Live Rank Ribbon with Progress Meter ────────── */}
       {user && userEntry && (
         <div className="user-live-rank-card">
           <div className="rank-badge-col">
@@ -123,8 +150,32 @@ export function CourseLeaderboard({
                 <Clock size={13} /> {userEntry.minutesWatched}m watched
               </span>
               <span className="dot-sep">·</span>
-              <span className="rule-note">2 XP / min watched</span>
+              <span className="rule-note">2 XP / min + 10 XP / lesson</span>
             </p>
+
+            {/* Completion Progress Meter (Synced with Owner Dashboard) */}
+            <div className="user-rank-completion-box">
+              <div className="user-rank-completion-head">
+                <span className="user-rank-progress-label">Course Completion</span>
+                <span className="user-rank-percent-badge">{userEntry.percent}%</span>
+              </div>
+              <div className="user-rank-progress-track">
+                <div
+                  className="user-rank-progress-fill"
+                  style={{ width: `${Math.min(100, Math.max(0, userEntry.percent))}%` }}
+                />
+              </div>
+              <div className="user-rank-completion-foot">
+                <span>
+                  {userEntry.completedCount}/{userEntry.lessonCount} lessons completed
+                </span>
+                {userEntry.percent === 100 ? (
+                  <span className="completion-complete-tag">🎓 100% Mastered</span>
+                ) : (
+                  <span>{Math.max(0, userEntry.lessonCount - userEntry.completedCount)} lessons remaining</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {userRank > 1 && leaderboard[userRank - 2] && (
@@ -144,9 +195,9 @@ export function CourseLeaderboard({
           <Zap size={18} />
         </div>
         <div className="explainer-copy">
-          <h4>2 XP for Every 1 Minute Watched</h4>
+          <h4>2 XP Every Minute Watched · 10 Bonus XP Per Lesson</h4>
           <p>
-            Learn consistently with Manmath Biradar. Earn <strong>+2 XP every minute</strong> of masterclass video watched, plus <strong>+10 bonus XP</strong> on completing lessons!
+            Learn consistently with Manmath Biradar. Earn <strong>+2 XP every minute</strong> of masterclass video watched, plus <strong>+10 bonus XP</strong> and milestone rewards on completing lessons!
           </p>
         </div>
       </div>
@@ -174,7 +225,18 @@ export function CourseLeaderboard({
                 <Zap size={13} />
                 <span>{top3[1].xp} XP</span>
               </div>
-              <small className="podium-meta">{top3[1].minutesWatched} mins</small>
+              <div className="podium-completion-box">
+                <div className="podium-progress-track">
+                  <div
+                    className="podium-progress-fill"
+                    style={{ width: `${Math.min(100, Math.max(0, top3[1].percent))}%` }}
+                  />
+                </div>
+                <small className="podium-completion-meta">
+                  {top3[1].percent}% · {top3[1].completedCount}/{top3[1].lessonCount} lessons
+                </small>
+              </div>
+              <small className="podium-meta">{top3[1].minutesWatched}m watched</small>
             </div>
           )}
 
@@ -198,7 +260,18 @@ export function CourseLeaderboard({
                 <Zap size={14} />
                 <span>{top3[0].xp} XP</span>
               </div>
-              <small className="podium-meta">{top3[0].minutesWatched} mins</small>
+              <div className="podium-completion-box">
+                <div className="podium-progress-track">
+                  <div
+                    className="podium-progress-fill"
+                    style={{ width: `${Math.min(100, Math.max(0, top3[0].percent))}%` }}
+                  />
+                </div>
+                <small className="podium-completion-meta">
+                  {top3[0].percent}% · {top3[0].completedCount}/{top3[0].lessonCount} lessons
+                </small>
+              </div>
+              <small className="podium-meta">{top3[0].minutesWatched}m watched</small>
             </div>
           )}
 
@@ -222,7 +295,18 @@ export function CourseLeaderboard({
                 <Zap size={13} />
                 <span>{top3[2].xp} XP</span>
               </div>
-              <small className="podium-meta">{top3[2].minutesWatched} mins</small>
+              <div className="podium-completion-box">
+                <div className="podium-progress-track">
+                  <div
+                    className="podium-progress-fill"
+                    style={{ width: `${Math.min(100, Math.max(0, top3[2].percent))}%` }}
+                  />
+                </div>
+                <small className="podium-completion-meta">
+                  {top3[2].percent}% · {top3[2].completedCount}/{top3[2].lessonCount} lessons
+                </small>
+              </div>
+              <small className="podium-meta">{top3[2].minutesWatched}m watched</small>
             </div>
           )}
         </div>
@@ -232,6 +316,7 @@ export function CourseLeaderboard({
       <div className="leaderboard-list">
         <div className="leaderboard-list-head">
           <span>Rank &amp; Founder</span>
+          <span className="desktop-progress-head">Course Completion</span>
           <span>Watch Time &amp; XP</span>
         </div>
 
@@ -279,6 +364,31 @@ export function CourseLeaderboard({
                       <span className="founder-handle">@{item.handle}</span>
                     </div>
                     {item.headline && <span className="founder-headline">{item.headline}</span>}
+
+                    {/* Mobile inline progress badge */}
+                    <div className="mobile-only-progress">
+                      <span className="mini-percent">{item.percent}% done</span>
+                      <span className="dot-sep">·</span>
+                      <span className="mini-lessons">{item.completedCount}/{item.lessonCount}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Center: Course Completion Widget (Synced from Owner Dashboard) */}
+                <div className="leaderboard-progress-col desktop-only-flex">
+                  <div className="leaderboard-progress-header">
+                    <span className={`leaderboard-percent-badge ${item.percent === 100 ? 'complete' : ''}`}>
+                      {item.percent}%
+                    </span>
+                    <span className="leaderboard-lessons-text">
+                      {item.completedCount}/{item.lessonCount} lessons
+                    </span>
+                  </div>
+                  <div className="leaderboard-progress-track">
+                    <div
+                      className={`leaderboard-progress-fill ${item.percent === 100 ? 'complete' : ''}`}
+                      style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }}
+                    />
                   </div>
                 </div>
 
@@ -288,9 +398,7 @@ export function CourseLeaderboard({
                     <strong>{item.xp} XP</strong>
                   </div>
                   <div className="leaderboard-time-meta">
-                    <span>{item.minutesWatched}m</span>
-                    <span className="pipe-sep">·</span>
-                    <span>{item.lessonsCompleted} done</span>
+                    <span>{item.minutesWatched}m watched</span>
                   </div>
                 </div>
               </div>

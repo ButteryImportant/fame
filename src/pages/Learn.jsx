@@ -652,6 +652,7 @@ export function Learn() {
                         <CourseLeaderboard
                           initialCourseId={courseId}
                           compact={isMobile}
+                          currentUserCourses={dashboard?.courses}
                         />
                       </div>
                     )}

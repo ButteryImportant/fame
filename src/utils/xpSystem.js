@@ -1,5 +1,6 @@
 // ─── FAME XP & Gamification Engine ───────────────────────────────────────────
 // Rule: 2 XP for every 1 minute (60 seconds) watched (1 XP per 30 seconds).
+// Completion XP: 10 XP per completed lesson + milestone bonuses.
 // ONLY real registered individuals from the database and authenticated users are tracked.
 
 export const XP_PER_MINUTE = 2;
@@ -57,17 +58,19 @@ function getUserStorageKey(userId) {
 // ─── Load Stored XP ──────────────────────────────────────────────────────────
 export function getStoredUserXP(userId) {
   try {
-    const raw = localStorage.getItem(getUserStorageKey(userId));
-    if (raw) {
-      const data = JSON.parse(raw);
-      return {
-        totalXP: Number(data.totalXP) || 0,
-        totalSecondsWatched: Number(data.totalSecondsWatched) || 0,
-        courseSeconds: data.courseSeconds || {},
-        courseXP: data.courseXP || {},
-        lessonSeconds: data.lessonSeconds || {},
-        completedBonusAwarded: data.completedBonusAwarded || {},
-      };
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(getUserStorageKey(userId));
+      if (raw) {
+        const data = JSON.parse(raw);
+        return {
+          totalXP: Number(data.totalXP) || 0,
+          totalSecondsWatched: Number(data.totalSecondsWatched) || 0,
+          courseSeconds: data.courseSeconds || {},
+          courseXP: data.courseXP || {},
+          lessonSeconds: data.lessonSeconds || {},
+          completedBonusAwarded: data.completedBonusAwarded || {},
+        };
+      }
     }
   } catch (e) {
     console.error('Error reading XP from localStorage:', e);
@@ -176,94 +179,257 @@ export function awardLessonCompletionXP(userId, courseId, lessonId) {
   }
 
   return {
-    gainedXP: LESSON_COMPLETE_BONUS_XP,
+    gainedXP,
     totalXP: data.totalXP,
     courseXP: data.courseXP[courseId] || 0,
   };
 }
 
+// ─── Extract Course Progress from Any User Object (Owner DB / Dashboard) ────
+export function extractUserCourseProgress(userObj, courseId) {
+  if (!userObj) return null;
+
+  // 1. Check userObj.courses (as formatted by /api/admin/users or /api/dashboard)
+  if (Array.isArray(userObj.courses)) {
+    const match = userObj.courses.find((c) => c && (c.id === courseId || c.slug === courseId));
+    if (match) {
+      const completedCount = Number(
+        match.completedCount ??
+        (Array.isArray(match.completed) ? match.completed.length : 0)
+      ) || 0;
+      const lessonCount = Number(match.lessonCount) || 15;
+      const percent = typeof match.percent === 'number'
+        ? match.percent
+        : (lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0);
+      return {
+        enrolled: true,
+        completedCount,
+        lessonCount,
+        percent,
+        title: match.title,
+        eyebrow: match.eyebrow,
+      };
+    }
+  }
+
+  // 2. Check userObj.enrolled_courses (as formatted by /api/community/members)
+  if (Array.isArray(userObj.enrolled_courses)) {
+    const match = userObj.enrolled_courses.find((c) => c && (c.id === courseId || c.slug === courseId));
+    if (match) {
+      const completedCount = Number(
+        match.completedCount ??
+        (Array.isArray(match.completed) ? match.completed.length : 0)
+      ) || 0;
+      const lessonCount = Number(match.lessonCount) || 15;
+      const percent = typeof match.percent === 'number'
+        ? match.percent
+        : (lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0);
+      return {
+        enrolled: true,
+        completedCount,
+        lessonCount,
+        percent,
+        title: match.title,
+        eyebrow: match.eyebrow,
+      };
+    }
+  }
+
+  return null;
+}
+
+// ─── Calculate Leaderboard XP Formula ─────────────────────────────────────────
+export function calculateLeaderboardXP({ completedCount = 0, percent = 0, minutesWatched = 0 }) {
+  // 1. Completion XP: 10 XP for each completed lesson
+  const completionXP = completedCount * LESSON_COMPLETE_BONUS_XP;
+
+  // 2. Milestone bonuses based on completion percentage synced from owner dashboard
+  // 100% completion = +50 bonus XP (Masterclass Graduate)
+  // >= 50% completion = +25 bonus XP (Halfway Mark)
+  // >= 25% completion = +10 bonus XP (Momentum Builder)
+  const milestoneBonus = percent === 100 ? 50 : percent >= 50 ? 25 : percent >= 25 ? 10 : 0;
+
+  // 3. Watch Time XP: 2 XP for every 1 minute watched
+  const watchXP = minutesWatched * XP_PER_MINUTE;
+
+  const totalXP = completionXP + milestoneBonus + watchXP;
+  return {
+    totalXP,
+    completionXP,
+    milestoneBonus,
+    watchXP,
+  };
+}
+
 // ─── Build Course Leaderboard (STRICTLY REAL REGISTERED MEMBERS ONLY) ────────
-export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null, liveMembers = []) {
+export function getCourseLeaderboard(
+  courseId = 'blueprint',
+  currentUser = null,
+  liveMembers = [],
+  currentUserCourses = []
+) {
   const tierInfo = getTierInfo(courseId);
   const list = [];
+  const processedUserIds = new Set();
 
-  // Read current authenticated user XP
+  // Read current authenticated user XP and watch time
   const userXPData = currentUser
     ? getStoredUserXP(currentUser.id || currentUser.email)
     : { totalXP: 0, courseXP: {}, courseSeconds: {} };
-  const userCourseXP = (userXPData.courseXP && userXPData.courseXP[courseId]) || 0;
-  const userMinutesWatched = Math.floor(
-    ((userXPData.courseSeconds && userXPData.courseSeconds[courseId]) || 0) / 60
-  );
+
+  const userCourseSeconds = (userXPData.courseSeconds && userXPData.courseSeconds[courseId]) || 0;
+  const userMinutesWatched = Math.floor(userCourseSeconds / 60);
 
   // 1. Process REAL registered members from the actual database
   if (Array.isArray(liveMembers) && liveMembers.length > 0) {
     liveMembers.forEach((m) => {
-      // Don't duplicate current user
-      if (
+      if (!m || !m.id) return;
+
+      const isCurrent =
         currentUser &&
         (m.id === currentUser.id ||
-          (currentUser.email && m.email && m.email.toLowerCase() === currentUser.email.toLowerCase()))
-      ) {
+          (currentUser.email && m.email && m.email.toLowerCase() === currentUser.email.toLowerCase()));
+
+      // Extract exact course progress as calculated in owner dashboard
+      const progress = extractUserCourseProgress(m, courseId);
+      if (!progress && !isCurrent) {
+        // Not enrolled in this course
         return;
       }
 
-      // Check if this real member is enrolled in the selected course
-      const isEnrolled =
-        m.enrolled_courses?.some((c) => c.id === courseId) ||
-        (m.role === 'admin' && false); // admins aren't learners unless enrolled
+      processedUserIds.add(m.id);
+      if (m.email) processedUserIds.add(m.email.toLowerCase());
 
-      if (isEnrolled) {
-        // Real user's completed lessons count
-        const completedCount = m.completed_count || (m.completed ? m.completed.length : 0);
-        // Base XP from real completed lessons (+10 XP per completed lesson)
-        const memberXP = completedCount * LESSON_COMPLETE_BONUS_XP;
+      if (isCurrent) {
+        // Current user: merge DB completion from owner DB with local watch time
+        const completedCount = progress?.completedCount ?? (
+          Array.isArray(currentUser.completed) ? currentUser.completed.length : 0
+        );
+        const lessonCount = progress?.lessonCount ?? 15;
+        const percent = progress?.percent ?? (lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0);
+
+        const xpBreakdown = calculateLeaderboardXP({
+          completedCount,
+          percent,
+          minutesWatched: userMinutesWatched,
+        });
+
+        list.push({
+          id: m.id,
+          name: `${m.name || currentUser.name || 'You'} (You)`,
+          handle: m.handle || currentUser.handle || (m.email ? m.email.split('@')[0] : 'you'),
+          headline: m.headline || currentUser.headline || 'Active Learner & FAME Founder',
+          location: m.location || currentUser.location || '',
+          avatar_url: m.avatar_url || m.avatar || currentUser.avatar_url || currentUser.avatar,
+          avatarBg: '#125945',
+          badge: `${tierInfo.tierName} Pioneer`,
+          xp: xpBreakdown.totalXP,
+          completionXP: xpBreakdown.completionXP,
+          milestoneBonus: xpBreakdown.milestoneBonus,
+          watchXP: xpBreakdown.watchXP,
+          minutesWatched: userMinutesWatched,
+          completedCount,
+          lessonCount,
+          percent,
+          isCurrentUser: true,
+        });
+      } else {
+        // Real registered peer member
+        const completedCount = progress.completedCount || 0;
+        const lessonCount = progress.lessonCount || 15;
+        const percent = progress.percent || (lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0);
+
+        // Minutes watched estimated from completed masterclass lessons (~12 min per completed module)
+        const minutesWatched = m.minutes_watched ?? (completedCount * 12);
+
+        const xpBreakdown = calculateLeaderboardXP({
+          completedCount,
+          percent,
+          minutesWatched,
+        });
 
         list.push({
           id: m.id,
           name: m.name,
-          handle: m.handle || (m.email ? m.email.split('@')[0] : `user_${m.id}`),
+          handle: m.handle || (m.email ? m.email.split('@')[0] : `user_${String(m.id).slice(0, 6)}`),
           headline: m.headline || 'Registered FAME Member',
           location: m.location || '',
           avatar_url: m.avatar_url || m.avatar,
           avatarBg: '#1b3b2d',
           badge: `${tierInfo.tierName} Member`,
-          xp: memberXP,
-          minutesWatched: Math.round(memberXP / 2),
-          lessonsCompleted: completedCount,
-          totalLessons: 15,
+          xp: xpBreakdown.totalXP,
+          completionXP: xpBreakdown.completionXP,
+          milestoneBonus: xpBreakdown.milestoneBonus,
+          watchXP: xpBreakdown.watchXP,
+          minutesWatched,
+          completedCount,
+          lessonCount,
+          percent,
           isCurrentUser: false,
         });
       }
     });
   }
 
-  // 2. Include the current user if logged in
-  if (currentUser) {
-    const userHandle =
-      currentUser.handle || (currentUser.email ? currentUser.email.split('@')[0] : 'you');
-    const userCompletedCount = Array.isArray(currentUser.completed) ? currentUser.completed.length : 0;
+  // 2. If current user is logged in and was not already processed from liveMembers
+  if (
+    currentUser &&
+    !processedUserIds.has(currentUser.id) &&
+    !(currentUser.email && processedUserIds.has(currentUser.email.toLowerCase()))
+  ) {
+    const coursesToSearch = Array.isArray(currentUserCourses) && currentUserCourses.length > 0
+      ? currentUserCourses
+      : (Array.isArray(currentUser.courses) ? currentUser.courses : []);
+
+    const userCourse = coursesToSearch.find((c) => c && (c.id === courseId || c.slug === courseId));
+
+    const completedCount = Number(
+      userCourse?.completedCount ??
+      (Array.isArray(userCourse?.completed)
+        ? userCourse.completed.length
+        : (Array.isArray(currentUser.completed) ? currentUser.completed.length : 0))
+    ) || 0;
+
+    const lessonCount = Number(userCourse?.lessonCount) || 15;
+    const percent = typeof userCourse?.percent === 'number'
+      ? userCourse.percent
+      : (lessonCount > 0 ? Math.round((completedCount / lessonCount) * 100) : 0);
+
+    const xpBreakdown = calculateLeaderboardXP({
+      completedCount,
+      percent,
+      minutesWatched: userMinutesWatched,
+    });
 
     const userEntry = {
       id: currentUser.id || 'current_user',
       name: `${currentUser.name || 'You'} (You)`,
-      handle: userHandle,
+      handle: currentUser.handle || (currentUser.email ? currentUser.email.split('@')[0] : 'you'),
       headline: currentUser.headline || 'Active Learner & FAME Founder',
       location: currentUser.location || '',
       avatar_url: currentUser.avatar_url || currentUser.avatar,
       avatarBg: '#125945',
       badge: `${tierInfo.tierName} Pioneer`,
-      xp: userCourseXP,
+      xp: xpBreakdown.totalXP,
+      completionXP: xpBreakdown.completionXP,
+      milestoneBonus: xpBreakdown.milestoneBonus,
+      watchXP: xpBreakdown.watchXP,
       minutesWatched: userMinutesWatched,
-      lessonsCompleted: userCompletedCount,
-      totalLessons: 15,
+      completedCount,
+      lessonCount,
+      percent,
       isCurrentUser: true,
     };
     list.push(userEntry);
   }
 
-  // Sort strictly descending by XP
-  list.sort((a, b) => b.xp - a.xp || b.lessonsCompleted - a.lessonsCompleted);
+  // Sort strictly descending by XP, then completion percent, then completed lessons count
+  list.sort((a, b) => {
+    if (b.xp !== a.xp) return b.xp - a.xp;
+    if (b.percent !== a.percent) return b.percent - a.percent;
+    if (b.completedCount !== a.completedCount) return b.completedCount - a.completedCount;
+    return a.name.localeCompare(b.name);
+  });
 
   // Assign ranks
   const rankedList = list.map((item, index) => ({

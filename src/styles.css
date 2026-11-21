@@ -3437,6 +3437,165 @@
   opacity: 0.4;
 }
 
+/* Leaderboard Course Progress Meter (Synced from Owner Dashboard) */
+.user-rank-completion-box {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.user-rank-completion-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.user-rank-progress-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #d1ead9;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.user-rank-percent-badge {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #c5ee8b;
+}
+
+.user-rank-progress-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.user-rank-progress-fill {
+  height: 100%;
+  background: #c5ee8b;
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+
+.user-rank-completion-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: #a8cfb7;
+  margin-top: 4px;
+}
+
+.completion-complete-tag {
+  color: #c5ee8b;
+  font-weight: 750;
+}
+
+/* Podium Completion Bar */
+.podium-completion-box {
+  width: 100%;
+  margin-top: 6px;
+  padding: 0 4px;
+}
+
+.podium-progress-track {
+  height: 4px;
+  background: #e2ece6;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.podium-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.podium-card.champion .podium-progress-fill {
+  background: #eab308;
+}
+
+.podium-completion-meta {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 650;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Leaderboard List Row Progress Column (Matched to Owner Dashboard Box) */
+.desktop-progress-head {
+  display: block;
+}
+
+.leaderboard-progress-col {
+  min-width: 150px;
+  max-width: 190px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f8faf9;
+  border: 1px solid #e1e9e4;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.leaderboard-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.leaderboard-percent-badge {
+  font-weight: 750;
+  font-size: 0.74rem;
+  color: var(--green);
+}
+
+.leaderboard-percent-badge.complete {
+  color: #15803d;
+}
+
+.leaderboard-lessons-text {
+  font-size: 0.67rem;
+  color: var(--muted);
+}
+
+.leaderboard-progress-track {
+  height: 4px;
+  background: #e0ece5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.leaderboard-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.leaderboard-progress-fill.complete {
+  background: #16a34a;
+}
+
+.desktop-only-flex {
+  display: flex;
+}
+
+.mobile-only-progress {
+  display: none;
+}
+
 /* Dashboard Leaderboard Card Wrapper */
 .dashboard-leaderboard-card {
   margin-top: 16px;
@@ -3782,6 +3941,24 @@
     font-size: 0.74rem !important;
   }
 
+  .desktop-progress-head {
+    display: none !important;
+  }
+
+  .desktop-only-flex {
+    display: none !important;
+  }
+
+  .mobile-only-progress {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    color: var(--green);
+    font-weight: 650;
+    margin-top: 2px;
+  }
+
   /* Bottom Lesson Nav */
   .lesson-footer-nav {
     flex-direction: column !important;
@@ -3832,6 +4009,23 @@
 [data-theme="dark"] .leaderboard-row.current-user-row {
   background: #0d2c23;
   border-color: #34d399;
+}
+
+[data-theme="dark"] .leaderboard-progress-col {
+  background: #081a15;
+  border-color: #173b2f;
+}
+
+[data-theme="dark"] .leaderboard-progress-track {
+  background: #112d23;
+}
+
+[data-theme="dark"] .leaderboard-progress-fill {
+  background: #34d399;
+}
+
+[data-theme="dark"] .leaderboard-percent-badge {
+  color: #34d399;
 }
 
 [data-theme="dark"] .founder-name {
@@ -4049,7 +4243,8 @@
 [data-theme="sepia"] .member-card,
 [data-theme="sepia"] .doubt-card,
 [data-theme="sepia"] .account-panel,
-[data-theme="sepia"] .leaderboard-row {
+[data-theme="sepia"] .leaderboard-row,
+[data-theme="sepia"] .leaderboard-progress-col {
   background: #fffdfa;
   border-color: #eadfce;
 }
@@ -4132,7 +4327,8 @@
 [data-theme="slate"] .member-card,
 [data-theme="slate"] .doubt-card,
 [data-theme="slate"] .account-panel,
-[data-theme="slate"] .leaderboard-row {
+[data-theme="slate"] .leaderboard-row,
+[data-theme="slate"] .leaderboard-progress-col {
   background: #0f172a;
   border-color: #1e293b;
   color: #f8fafc;
@@ -4216,7 +4412,8 @@
 [data-theme="amethyst"] .member-card,
 [data-theme="amethyst"] .doubt-card,
 [data-theme="amethyst"] .account-panel,
-[data-theme="amethyst"] .leaderboard-row {
+[data-theme="amethyst"] .leaderboard-row,
+[data-theme="amethyst"] .leaderboard-progress-col {
   background: #151022;
   border-color: #271f3b;
   color: #faf7ff;

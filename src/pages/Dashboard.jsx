@@ -144,6 +144,7 @@ export function Dashboard() {
           <div className="dashboard-leaderboard-card">
             <CourseLeaderboard
               initialCourseId={data.courses[0]?.id || 'blueprint'}
+              currentUserCourses={data.courses}
             />
           </div>
 
