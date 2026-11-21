@@ -593,7 +593,7 @@ export function UsersDirectoryWorkspace({
               </div>
               <div>
                 <small style={{ display: 'block', color: 'var(--muted)', fontSize: '.74rem', textTransform: 'uppercase' }}>Temporary Password</small>
-                <code style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--green)', background: '#fff', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1e0d8', display: 'inline-block', marginTop: '4px' }}>
+                <code style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--green)', background: 'var(--surface-alt)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--line)', display: 'inline-block', marginTop: '4px' }}>
                   {createdCredentials.password}
                 </code>
               </div>

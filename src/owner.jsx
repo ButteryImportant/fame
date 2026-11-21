@@ -1313,14 +1313,14 @@ function LearnerAccessWorkspace({
                       ) : (
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.75rem', marginBottom: '3px' }}>
-                            <span style={{ fontWeight: 650, color: (e.percent === 100 ? '#15803d' : 'var(--ink)') }}>
+                            <span style={{ fontWeight: 650, color: (e.percent === 100 ? 'var(--green)' : 'var(--ink)') }}>
                               {e.percent || 0}% Complete
                             </span>
                             <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>
                               {e.completedCount || 0}/{e.lessonCount || 0}
                             </span>
                           </div>
-                          <div style={{ height: '5px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div style={{ height: '5px', background: 'var(--line)', borderRadius: '4px', overflow: 'hidden' }}>
                             <div
                               style={{
                                 height: '100%',

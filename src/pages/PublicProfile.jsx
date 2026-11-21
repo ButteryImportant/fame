@@ -278,7 +278,7 @@ export function PublicProfile() {
                       <span>{progress && progress.totalLessons > 0 ? 'Enrolled Programmes & Progress' : 'Enrolled Programmes'}</span>
                     </h3>
                     {progress && progress.totalLessons > 0 && (
-                      <span className="overall-progress-pill" style={{ background: '#eef6f2', color: 'var(--green)', padding: '4px 12px', borderRadius: '20px', fontWeight: 700, fontSize: '.78rem' }}>
+                      <span className="overall-progress-pill" style={{ background: 'var(--soft)', color: 'var(--green)', border: '1px solid var(--line)', padding: '4px 12px', borderRadius: '20px', fontWeight: 700, fontSize: '.78rem' }}>
                         {progress.percent}% Overall Curriculum Complete
                       </span>
                     )}
@@ -295,7 +295,7 @@ export function PublicProfile() {
                               <h4 style={{ margin: '6px 0 0', fontSize: '1.05rem', fontWeight: 650 }}>{c.title}</h4>
                             </div>
                             {hasProgress ? (
-                              <span className="course-progress-badge" style={{ background: '#e6f4ea', color: '#137333', fontWeight: 700, fontSize: '.76rem', padding: '3px 8px', borderRadius: '4px' }}>
+                              <span className="course-progress-badge" style={{ background: 'var(--soft)', color: 'var(--green)', border: '1px solid var(--line)', fontWeight: 700, fontSize: '.76rem', padding: '3px 8px', borderRadius: '4px' }}>
                                 {c.percent}%
                               </span>
                             ) : (
@@ -307,7 +307,7 @@ export function PublicProfile() {
 
                           {hasProgress && (
                             <>
-                              <div className="course-progress-track" style={{ height: '7px', background: '#e5ede8', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px' }}>
+                              <div className="course-progress-track" style={{ height: '7px', background: 'var(--line)', borderRadius: '5px', overflow: 'hidden', margin: '12px 0 8px' }}>
                                 <div 
                                   className="course-progress-fill" 
                                   style={{ height: '100%', background: 'var(--green)', borderRadius: '5px', width: `${Math.min(100, Math.max(0, c.percent))}%` }} 
@@ -318,7 +318,7 @@ export function PublicProfile() {
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.76rem', color: 'var(--muted)' }}>
                                 <span>{c.completedCount} of {c.lessonCount} lessons completed</span>
                                 {c.percent === 100 && (
-                                  <span style={{ color: '#137333', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                                  <span style={{ color: 'var(--green)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
                                     <CheckCircle2 size={12} /> 100% Completed
                                   </span>
                                 )}
