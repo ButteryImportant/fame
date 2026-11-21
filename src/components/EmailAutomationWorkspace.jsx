@@ -2188,13 +2188,13 @@ export function EmailAutomationWorkspace({
               </div>
 
               <div className="brevo-specs-box">
-                <h4>Brevo SMTP Relay Config (Configured in .env)</h4>
+                <h4>Brevo SMTP Relay Config (Active &amp; Verified in .env)</h4>
                 <div className="specs-row-grid">
-                  <div><span className="s-label">SMTP Host:</span> <code>smtp-relay.brevo.com</code></div>
-                  <div><span className="s-label">Port:</span> <code>587</code></div>
-                  <div><span className="s-label">Encryption:</span> <code>STARTTLS (secure: false)</code></div>
-                  <div><span className="s-label">SMTP Key:</span> <code>Active (xsmtpsib-... configured)</code></div>
-                  <div><span className="s-label">Free Allowance:</span> <code>300 emails/day forever</code></div>
+                  <div><span className="s-label">SMTP Server:</span> <code>smtp-relay.brevo.com</code></div>
+                  <div><span className="s-label">Port:</span> <code>465</code></div>
+                  <div><span className="s-label">Encryption:</span> <code>Direct TLS / SSL (secure: true)</code></div>
+                  <div><span className="s-label">SMTP Login:</span> <code>a69439001@smtp-brevo.com</code></div>
+                  <div><span className="s-label">SMTP Key:</span> <code>Active (xsmtpsib-... in .env)</code></div>
                   <div><span className="s-label">Sender Address:</span> <code>mentor@foodbusinesscoach.online</code></div>
                 </div>
               </div>
