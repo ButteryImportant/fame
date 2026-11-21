@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -17,33 +17,82 @@ import {
   Download,
   Menu,
   X,
+  Trophy,
+  Zap,
+  Clock,
+  Flame,
 } from 'lucide-react';
 import { useLoad } from '../hooks/useLoad';
 import { Notice, Loader, Brand, formatVideoEmbedUrl } from '../components/shared';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { groupBy } from '../utils/groupBy.js';
 import { api } from '../api.js';
+import { useAuth } from '../context/AuthContext';
+import { CourseLeaderboard } from '../components/CourseLeaderboard';
+import {
+  recordWatchTime,
+  awardLessonCompletionXP,
+  getStoredUserXP,
+  getTierInfo,
+} from '../utils/xpSystem';
 
 export function Learn() {
   const { courseId, lessonId } = useParams();
+  const { user } = useAuth();
   const [revision, setRevision] = useState(0);
   const { data: dashboard, error: dashboardError } = useLoad('/dashboard', revision);
   const { data: lesson, error, loading } = useLoad(`/learn/${courseId}/${lessonId}`);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [theaterMode, setTheaterMode] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('guide'); // 'guide' | 'notebook' | 'resources'
+
+  // Responsive mobile sidebar default: closed on mobile (< 900px), open on desktop
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 900 : false
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 900 : true
+  );
+
+  const [activeTab, setActiveTab] = useState('guide'); // 'guide' | 'notebook' | 'leaderboard' | 'resources'
   const [notes, setNotes] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
+  const [liveWatchSeconds, setLiveWatchSeconds] = useState(0);
+  const [xpToast, setXpToast] = useState(null);
+  const [userXPState, setUserXPState] = useState(() =>
+    getStoredUserXP(user?.id || user?.email)
+  );
+
   const navigate = useNavigate();
+  const videoRef = useRef(null);
+  const isVideoPlayingRef = useRef(true); // default active when focused
 
   const course = dashboard?.courses?.find((c) => c.id === courseId);
   const completed = course?.completed?.includes(lessonId);
   const groups = course ? groupBy(course.lessons, (l) => l.module_title) : {};
   const currentIdx = course?.lessons?.findIndex((l) => l.id === lessonId) ?? -1;
   const prev = currentIdx > 0 ? course?.lessons[currentIdx - 1] : null;
-  const next = currentIdx >= 0 && currentIdx < (course?.lessons?.length ?? 0) - 1 ? course?.lessons[currentIdx + 1] : null;
+  const next =
+    currentIdx >= 0 && currentIdx < (course?.lessons?.length ?? 0) - 1
+      ? course?.lessons[currentIdx + 1]
+      : null;
+
+  const tier = getTierInfo(courseId);
+  const currentCourseXP =
+    (userXPState.courseXP && userXPState.courseXP[courseId]) || 0;
+
+  // Window resize listener to handle responsive states
+  useEffect(() => {
+    function handleResize() {
+      const mobile = window.innerWidth < 900;
+      setIsMobile(mobile);
+      if (mobile && theaterMode) {
+        setTheaterMode(false);
+      }
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [theaterMode]);
 
   // Load saved notes for this lesson from localStorage
   useEffect(() => {
@@ -53,6 +102,65 @@ export function Learn() {
       setNotesSaved(false);
     }
   }, [courseId, lessonId]);
+
+  // Listen for global XP events to update the UI counter
+  useEffect(() => {
+    function handleXPEvent(e) {
+      const detail = e.detail;
+      setUserXPState(getStoredUserXP(user?.id || user?.email));
+      if (detail && detail.gainedXP) {
+        setXpToast({
+          amount: detail.gainedXP,
+          reason:
+            detail.reason === 'lesson_completed'
+              ? 'Lesson Completed Bonus!'
+              : '1 min watched (+2 XP)',
+        });
+        setTimeout(() => setXpToast(null), 3200);
+      }
+    }
+    window.addEventListener('fame_xp_updated', handleXPEvent);
+    return () => window.removeEventListener('fame_xp_updated', handleXPEvent);
+  }, [user]);
+
+  // Active watch time ticker: 2 XP for every 1 minute watched (1 XP every 30 seconds)
+  useEffect(() => {
+    if (!lessonId || !courseId) return;
+
+    // Reset local seconds for current session view
+    setLiveWatchSeconds(0);
+
+    const interval = setInterval(() => {
+      // Only count if document/tab is active & focused
+      if (typeof document !== 'undefined' && !document.hidden && isVideoPlayingRef.current) {
+        setLiveWatchSeconds((s) => s + 1);
+        recordWatchTime(user?.id || user?.email, courseId, lessonId, 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [courseId, lessonId, user]);
+
+  // Listen to postMessage from YouTube iframe
+  useEffect(() => {
+    function handleMessage(event) {
+      try {
+        if (typeof event.data === 'string') {
+          const data = JSON.parse(event.data);
+          // YouTube API onStateChange: 1 = playing, 2 = paused, 0 = ended
+          if (data.event === 'onStateChange') {
+            if (data.info === 1) {
+              isVideoPlayingRef.current = true;
+            } else if (data.info === 2 || data.info === 0) {
+              isVideoPlayingRef.current = false;
+            }
+          }
+        }
+      } catch {}
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   function handleNotesChange(e) {
     const val = e.target.value;
@@ -66,8 +174,17 @@ export function Learn() {
     setBusy(true);
     setSaveError('');
     try {
-      await api(`/progress/${lessonId}`, { method: 'PUT', body: { completed: !completed } });
+      const willBeCompleted = !completed;
+      await api(`/progress/${lessonId}`, {
+        method: 'PUT',
+        body: { completed: willBeCompleted },
+      });
       setRevision((v) => v + 1);
+
+      // Award bonus XP if marking as complete
+      if (willBeCompleted) {
+        awardLessonCompletionXP(user?.id || user?.email, courseId, lessonId);
+      }
     } catch (e) {
       setSaveError(e.message);
     } finally {
@@ -81,6 +198,7 @@ export function Learn() {
     }
     if (next) {
       navigate(`/learn/${courseId}/${next.id}`);
+      if (isMobile) setSidebarOpen(false);
     } else {
       navigate('/dashboard');
     }
@@ -89,21 +207,36 @@ export function Learn() {
   const { url: videoEmbedUrl, isEmbed } = formatVideoEmbedUrl(lesson?.video_url);
 
   return (
-    <div className={`learn-page ${theaterMode ? 'theater-active' : ''}`}>
+    <div className={`learn-page tier-${tier.tier} ${theaterMode ? 'theater-active' : ''}`}>
       {/* ─── Top Navigation Bar ────────────────────────────────────────── */}
       <header className="learn-header">
         <div className="learn-header-left">
+          <Link className="learn-mobile-back" to="/dashboard" aria-label="Back to Dashboard">
+            <ArrowLeft size={18} />
+          </Link>
           <Brand />
           {course && (
             <div className="learn-course-badge">
-              <span className="course-tier-tag">{course.eyebrow}</span>
+              <span className={`course-tier-tag ${tier.tier}`}>{course.eyebrow}</span>
               <span className="course-title-text">{course.title}</span>
             </div>
           )}
         </div>
 
         <div className="learn-header-center">
-          <div className="learn-progress-compact">
+          {/* Live XP Pill */}
+          <button
+            className={`learn-xp-pill ${activeTab === 'leaderboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('leaderboard')}
+            title="View Course Leaderboard (2 XP / min watched)"
+            aria-label="View Course Leaderboard"
+          >
+            <Zap size={14} className="xp-bolt pulse" />
+            <span className="xp-val">{currentCourseXP} XP</span>
+            <span className="xp-rate-tag">+2/min</span>
+          </button>
+
+          <div className="learn-progress-compact desktop-only">
             <span>Progress: {course?.percent || 0}%</span>
             <div className="compact-meter">
               <div
@@ -126,7 +259,7 @@ export function Learn() {
           </button>
 
           <button
-            className={`learn-action-btn ${theaterMode ? 'active' : ''}`}
+            className={`learn-action-btn desktop-only ${theaterMode ? 'active' : ''}`}
             onClick={() => setTheaterMode(!theaterMode)}
             title={theaterMode ? 'Exit theater mode' : 'Theater mode'}
             aria-label="Toggle theater mode"
@@ -137,12 +270,21 @@ export function Learn() {
 
           <ThemeToggle />
 
-          <Link className="back-link learn-back-btn" to="/dashboard">
+          <Link className="back-link learn-back-btn desktop-only" to="/dashboard">
             <ArrowLeft size={16} />
             <span>Dashboard</span>
           </Link>
         </div>
       </header>
+
+      {/* ─── Mobile Sidebar Overlay Backdrop ───────────────────────────── */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="learn-sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* ─── Main Workspace Layout ──────────────────────────────────────── */}
       <div className={`learn-layout ${sidebarOpen ? 'sidebar-visible' : 'sidebar-hidden'}`}>
@@ -168,6 +310,22 @@ export function Learn() {
           </div>
           <progress value={course?.percent || 0} max="100" aria-label="Course completion" />
 
+          {/* Quick Leaderboard Shortcut in Sidebar */}
+          <button
+            className="sidebar-leaderboard-cta"
+            onClick={() => {
+              setActiveTab('leaderboard');
+              if (isMobile) setSidebarOpen(false);
+            }}
+          >
+            <Trophy size={16} className="trophy-icon" />
+            <div className="cta-copy">
+              <span>Course Leaderboard</span>
+              <small>{currentCourseXP} XP earned · View standings</small>
+            </div>
+            <ChevronRight size={14} />
+          </button>
+
           <div className="lesson-sidebar-scroll">
             {Object.entries(groups).map(([module, lessons], i) => (
               <div className="lesson-module" key={module}>
@@ -182,6 +340,9 @@ export function Learn() {
                       key={l.id}
                       className={`lesson-nav ${isCurrent ? 'active' : ''} ${isDone ? 'done' : ''}`}
                       to={`/learn/${courseId}/${l.id}`}
+                      onClick={() => {
+                        if (isMobile) setSidebarOpen(false);
+                      }}
                     >
                       {isDone ? (
                         <CheckCircle2 size={18} className="lesson-status-icon checked" />
@@ -197,6 +358,7 @@ export function Learn() {
                             <Play size={10} fill="currentColor" /> Video
                           </span>
                           <span>{l.minutes} min</span>
+                          <span className="xp-tag-tiny">+{l.minutes * 2} XP</span>
                         </div>
                       </div>
                     </Link>
@@ -220,10 +382,12 @@ export function Learn() {
                 <div className="lesson-stage-header">
                   <div className="lesson-breadcrumb">
                     <span className="crumb-module">{lesson.module_title}</span>
-                    <ChevronRight size={14} />
-                    <span className="crumb-lesson">Lesson {currentIdx + 1} of {course?.lessons?.length || 1}</span>
-                    <ChevronRight size={14} />
-                    <span className="crumb-time">{lesson.minutes} min watch</span>
+                    <ChevronRight size={14} className="crumb-sep" />
+                    <span className="crumb-lesson">
+                      Lesson {currentIdx + 1} of {course?.lessons?.length || 1}
+                    </span>
+                    <ChevronRight size={14} className="crumb-sep desktop-only" />
+                    <span className="crumb-time desktop-only">{lesson.minutes} min watch</span>
                   </div>
 
                   <h1 className="lesson-title">{lesson.title}</h1>
@@ -233,8 +397,12 @@ export function Learn() {
                       <BookOpen size={15} />
                       <span>FAME · Manmath Biradar</span>
                     </div>
+                    <div className="byline-xp-badge">
+                      <Zap size={13} />
+                      <span>Earn 2 XP / min watched</span>
+                    </div>
                     {lesson.is_preview ? (
-                      <span className="preview-badge-pill">Free Preview Available</span>
+                      <span className="preview-badge-pill">Free Preview</span>
                     ) : null}
                   </div>
                 </div>
@@ -247,6 +415,17 @@ export function Learn() {
 
                 {/* ─── Cinema Video Player Theater ────────────────────── */}
                 <div className="cinema-container">
+                  {/* Real-time floating XP toast */}
+                  {xpToast && (
+                    <div className="xp-floating-toast" role="status">
+                      <Zap size={16} className="toast-bolt" />
+                      <div className="toast-text">
+                        <strong>+{xpToast.amount} XP!</strong>
+                        <span>{xpToast.reason}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="cinema-frame">
                     {videoEmbedUrl ? (
                       isEmbed ? (
@@ -260,11 +439,22 @@ export function Learn() {
                         />
                       ) : (
                         <video
+                          ref={videoRef}
                           className="lesson-iframe"
                           controls
                           controlsList="nodownload"
                           preload="metadata"
                           src={videoEmbedUrl}
+                          onPlay={() => {
+                            isVideoPlayingRef.current = true;
+                          }}
+                          onPause={() => {
+                            isVideoPlayingRef.current = false;
+                          }}
+                          onEnded={() => {
+                            isVideoPlayingRef.current = false;
+                            if (!completed) toggleComplete();
+                          }}
                         >
                           Your browser does not support this video player.
                         </video>
@@ -285,19 +475,27 @@ export function Learn() {
                     <div className="cinema-bar-left">
                       <span className="stream-badge">
                         <span className="stream-pulse" />
-                        YouTube High Definition Video
+                        <span className="stream-badge-text">HD Masterclass</span>
                       </span>
+
+                      {/* Live XP Tracker in Cinema Bar */}
+                      <div className="cinema-xp-pill" title="You earn 2 XP for every 1 minute of video watched">
+                        <Zap size={13} className="xp-icon pulse" />
+                        <span>
+                          <strong>+{Math.floor(liveWatchSeconds / 30)} XP</strong> watched
+                        </span>
+                      </div>
                     </div>
 
                     <div className="cinema-bar-right">
                       {prev && (
                         <button
-                          className="cinema-nav-btn"
+                          className="cinema-nav-btn prev-btn"
                           onClick={() => navigate(`/learn/${courseId}/${prev.id}`)}
                           title={`Previous: ${prev.title}`}
                         >
                           <ArrowLeft size={15} />
-                          <span>Previous</span>
+                          <span>Prev</span>
                         </button>
                       )}
 
@@ -309,11 +507,11 @@ export function Learn() {
                       >
                         {completed ? (
                           <>
-                            <Check size={16} /> Completed
+                            <Check size={16} /> <span className="btn-text">Completed</span>
                           </>
                         ) : (
                           <>
-                            <CheckCircle2 size={16} /> Mark as Complete
+                            <CheckCircle2 size={16} /> <span className="btn-text">Mark Complete (+10 XP)</span>
                           </>
                         )}
                       </button>
@@ -324,12 +522,12 @@ export function Learn() {
                           onClick={completeAndNext}
                           title={`Next: ${next.title}`}
                         >
-                          <span>{completed ? 'Next Lesson' : 'Complete & Next'}</span>
+                          <span className="btn-text">{completed ? 'Next' : 'Complete & Next'}</span>
                           <ArrowRight size={15} />
                         </button>
                       ) : (
-                        <Link className="cinema-next-btn" to="/dashboard">
-                          <span>Complete Course</span>
+                        <Link className="cinema-next-btn finish" to="/dashboard">
+                          <span className="btn-text">Finish</span>
                           <ArrowRight size={15} />
                         </Link>
                       )}
@@ -339,7 +537,7 @@ export function Learn() {
 
                 <Notice>{saveError}</Notice>
 
-                {/* ─── Interactive Tabs (Guide / Notebook / Templates) ─── */}
+                {/* ─── Interactive Tabs (Guide / Notebook / Leaderboard / Resources) ─── */}
                 <div className="lesson-tabs-section">
                   <div className="lesson-tabs-nav" role="tablist">
                     <button
@@ -349,7 +547,7 @@ export function Learn() {
                       aria-selected={activeTab === 'guide'}
                     >
                       <FileText size={16} />
-                      <span>Session Guide &amp; Key Principles</span>
+                      <span>Session Guide</span>
                     </button>
 
                     <button
@@ -359,8 +557,18 @@ export function Learn() {
                       aria-selected={activeTab === 'notebook'}
                     >
                       <PenSquare size={16} />
-                      <span>My Action Notebook</span>
+                      <span>Action Notebook</span>
                       {notes && <span className="notebook-dot" title="Has notes" />}
+                    </button>
+
+                    <button
+                      className={`tab-btn tab-leaderboard-btn ${activeTab === 'leaderboard' ? 'active' : ''}`}
+                      onClick={() => setActiveTab('leaderboard')}
+                      role="tab"
+                      aria-selected={activeTab === 'leaderboard'}
+                    >
+                      <Trophy size={16} />
+                      <span>Leaderboard ({tier.tierName})</span>
                     </button>
 
                     <button
@@ -370,7 +578,7 @@ export function Learn() {
                       aria-selected={activeTab === 'resources'}
                     >
                       <Sparkles size={16} />
-                      <span>Templates &amp; Formulas</span>
+                      <span>Formulas</span>
                     </button>
                   </div>
 
@@ -438,7 +646,17 @@ export function Learn() {
                       </div>
                     )}
 
-                    {/* Tab 3: Resources & Formulas */}
+                    {/* Tab 3: Course Leaderboard */}
+                    {activeTab === 'leaderboard' && (
+                      <div className="tab-pane leaderboard-pane">
+                        <CourseLeaderboard
+                          initialCourseId={courseId}
+                          compact={isMobile}
+                        />
+                      </div>
+                    )}
+
+                    {/* Tab 4: Resources & Formulas */}
                     {activeTab === 'resources' && (
                       <div className="tab-pane resources-pane">
                         <h3>Core Tools &amp; Frameworks for this Module</h3>
@@ -485,7 +703,10 @@ export function Learn() {
                   {prev ? (
                     <button
                       className="footer-nav-btn prev"
-                      onClick={() => navigate(`/learn/${courseId}/${prev.id}`)}
+                      onClick={() => {
+                        navigate(`/learn/${courseId}/${prev.id}`);
+                        if (isMobile) setSidebarOpen(false);
+                      }}
                     >
                       <ArrowLeft size={16} />
                       <div>

@@ -3,12 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   MessageSquare, ThumbsUp, CheckCircle2, Search, Plus, 
   HelpCircle, Sparkles, Filter, X, ArrowRight, UserCheck, ShieldCheck,
-  Users, GraduationCap, Award, TrendingUp, BookOpen, MapPin
+  Users, GraduationCap, Award, TrendingUp, BookOpen, MapPin, Trophy, Zap
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { Notice, Loader } from '../components/shared';
+import { CourseLeaderboard } from '../components/CourseLeaderboard';
 import { api } from '../api.js';
 
 const CATEGORIES = [
@@ -38,7 +39,13 @@ export function Community() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'members' ? 'members' : 'doubts');
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get('tab') === 'members'
+      ? 'members'
+      : searchParams.get('tab') === 'leaderboard'
+        ? 'leaderboard'
+        : 'doubts'
+  );
 
   // Doubts state
   const [posts, setPosts] = useState([]);
@@ -67,6 +74,8 @@ export function Community() {
   useEffect(() => {
     if (activeTab === 'members') {
       setSearchParams({ tab: 'members' }, { replace: true });
+    } else if (activeTab === 'leaderboard') {
+      setSearchParams({ tab: 'leaderboard' }, { replace: true });
     } else {
       setSearchParams({}, { replace: true });
     }
@@ -244,6 +253,14 @@ export function Community() {
               <Users size={17} />
               <span>Enrolled Founders</span>
               <span className="tab-pill">{members.length}</span>
+            </button>
+            <button
+              className={`community-nav-tab ${activeTab === 'leaderboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('leaderboard')}
+            >
+              <Trophy size={17} />
+              <span>Course Leaderboards</span>
+              <span className="tab-pill xp-pill-tab">XP</span>
             </button>
           </div>
 
@@ -565,6 +582,13 @@ export function Community() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ═════════════════ TAB 3: COURSE LEADERBOARDS ═════════════════ */}
+          {activeTab === 'leaderboard' && (
+            <div className="community-leaderboard-wrapper" style={{ marginTop: '24px' }}>
+              <CourseLeaderboard liveMembers={members} />
             </div>
           )}
         </div>

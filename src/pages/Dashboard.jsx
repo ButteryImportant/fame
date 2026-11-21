@@ -1,14 +1,26 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, CheckCircle2, GraduationCap, Mail, ArrowRight } from 'lucide-react';
+import { BookOpen, CheckCircle2, GraduationCap, Mail, ArrowRight, Zap, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLoad } from '../hooks/useLoad';
 import { StudentLayout } from '../components/StudentLayout';
 import { Arrow, Notice, Loader, CourseArt } from '../components/shared';
+import { CourseLeaderboard } from '../components/CourseLeaderboard';
+import { getStoredUserXP } from '../utils/xpSystem';
 import { money } from '../api.js';
 
 export function Dashboard() {
   const { user } = useAuth();
   const { data, error, loading } = useLoad('/dashboard');
+  const [userXP, setUserXP] = useState(() => getStoredUserXP(user?.id || user?.email));
+
+  useEffect(() => {
+    function handleXP() {
+      setUserXP(getStoredUserXP(user?.id || user?.email));
+    }
+    window.addEventListener('fame_xp_updated', handleXP);
+    return () => window.removeEventListener('fame_xp_updated', handleXP);
+  }, [user]);
 
   return (
     <StudentLayout>
@@ -52,6 +64,11 @@ export function Dashboard() {
               <CheckCircle2 />
               <strong>{data.courses.reduce((n, c) => n + c.completed.length, 0)}</strong>
               <span>Lessons completed</span>
+            </div>
+            <div className="xp-highlight-stat">
+              <Zap className="stat-zap-icon" />
+              <strong>{userXP.totalXP} XP</strong>
+              <span>Founder XP (2 XP/min)</span>
             </div>
             <div>
               <GraduationCap />
@@ -115,6 +132,20 @@ export function Dashboard() {
               </Link>
             </div>
           )}
+
+          {/* ─── Course Leaderboards (Silver · Gold · Diamond) ──────────── */}
+          <div className="dashboard-subheading" style={{ marginTop: '54px' }}>
+            <div>
+              <h2>Founder Leaderboards</h2>
+              <span>Rankings across Silver, Gold &amp; Diamond tiers</span>
+            </div>
+          </div>
+
+          <div className="dashboard-leaderboard-card">
+            <CourseLeaderboard
+              initialCourseId={data.courses[0]?.id || 'blueprint'}
+            />
+          </div>
 
           <div className="dashboard-subheading">
             <h2>My orders</h2>
