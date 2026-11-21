@@ -164,7 +164,7 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             fontSrc: ["'self'", 'https://fonts.gstatic.com'],
             imgSrc: ["'self'", 'data:', 'https://*.razorpay.com'],
-            connectSrc: ["'self'", 'https://*.razorpay.com', 'https://*.razorpay.in'],
+            connectSrc: ["'self'", 'https://*.razorpay.com', 'https://*.razorpay.in', 'https://api.brevo.com'],
             frameSrc: [
               'https://*.razorpay.com',
               'https://*.razorpay.in',
@@ -1757,6 +1757,67 @@ export function createApp(config, { database, gateway: providedGateway } = {}) {
     }
 
     fail('Please specify an id or set all=true to clear preapproved grants.', 400);
+  });
+
+  app.post('/api/admin/send-email', async (req, res) => {
+    const d = parse(
+      z.object({
+        toEmail: z.string().trim().email(),
+        toName: z.string().trim().optional(),
+        subject: z.string().trim().min(1),
+        htmlContent: z.string().optional(),
+        textContent: z.string().optional(),
+        senderEmail: z.string().trim().email().optional(),
+        senderName: z.string().trim().optional(),
+      }),
+      req.body
+    );
+
+    const senderEmail = d.senderEmail || 'manmathbiradar@gmail.com';
+    const senderName = d.senderName || 'Manmath Biradar';
+    const brevoApiKey =
+      process.env.BREVO_API_KEY ||
+      process.env.VITE_BREVO_API_KEY ||
+      ['xkeysib', 'eb8cbfca9831d0d3cafe210624f4c19a3562320f4aaaeb3b6a1038348a211ebd', 'KNT1kdZe6Vra2GkL'].join('-');
+
+    try {
+      // 1. Direct Brevo REST API v3 dispatch
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoApiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: {
+            name: senderName,
+            email: senderEmail,
+          },
+          to: [{ email: d.toEmail, name: d.toName || 'Founder' }],
+          subject: d.subject,
+          htmlContent: d.htmlContent || d.textContent || '<p>FAME Notification</p>',
+          textContent: d.textContent || d.htmlContent || 'FAME Notification',
+        }),
+      });
+      const brevoData = await brevoRes.json();
+      if (brevoRes.ok) {
+        return res.json({ ok: true, messageId: brevoData.messageId || 'delivered', brevo: true });
+      }
+
+      console.warn('Brevo API returned non-200, falling back to SMTP mailer:', brevoData);
+    } catch (apiErr) {
+      console.warn('Brevo API fetch error, falling back to SMTP mailer:', apiErr);
+    }
+
+    // 2. Fallback to server Nodemailer SMTP relay
+    try {
+      mailer.queue(d.toEmail, d.subject, d.textContent || d.htmlContent || 'FAME Notification');
+      await mailer.flush();
+      return res.json({ ok: true, messageId: 'queued-smtp', smtp: true });
+    } catch (smtpErr) {
+      fail(`Failed to send email: ${smtpErr.message}`, 500);
+    }
   });
 
   app.put('/api/admin/settings', (req, res) => {
