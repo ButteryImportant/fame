@@ -10,6 +10,7 @@ import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { Notice, Loader } from '../components/shared';
 import { CourseLeaderboard } from '../components/CourseLeaderboard';
+import { getAllPeerMembers } from '../utils/xpSystem';
 import { api } from '../api.js';
 
 const CATEGORIES = [
@@ -106,19 +107,54 @@ export function Community() {
       if (memberSearch.trim()) q.set('search', memberSearch.trim());
       if (memberCourse !== 'all') q.set('courseId', memberCourse);
       if (memberSort) q.set('sort', memberSort);
-      const res = await api(`/community/members?${q.toString()}`);
-      setMembers(res.members || []);
 
-      // Extract unique course titles for filter dropdown
-      const coursesMap = new Map();
-      (res.members || []).forEach(m => {
-        (m.enrolled_courses || []).forEach(c => {
-          if (!coursesMap.has(c.id)) {
-            coursesMap.set(c.id, c.title);
+      let dbMembers = [];
+      try {
+        const res = await api(`/community/members?${q.toString()}`);
+        dbMembers = res.members || [];
+      } catch (err) {
+        console.warn('API members unavailable, directory fallback:', err);
+      }
+
+      // Merge with peer founders across Silver, Gold, and Diamond tiers
+      const peerMembers = getAllPeerMembers();
+      const existingHandles = new Set(dbMembers.map((m) => (m.handle || '').toLowerCase()));
+      const combined = [...dbMembers];
+
+      for (const p of peerMembers) {
+        if (!existingHandles.has(p.handle.toLowerCase())) {
+          const s = memberSearch.trim().toLowerCase();
+          const matchesSearch =
+            !s ||
+            p.name.toLowerCase().includes(s) ||
+            p.handle.toLowerCase().includes(s) ||
+            p.headline.toLowerCase().includes(s) ||
+            p.location.toLowerCase().includes(s);
+
+          const matchesCourse =
+            memberCourse === 'all' ||
+            (memberCourse === 'blueprint' && (p.tier === 'silver' || p.courseId === 'blueprint')) ||
+            (memberCourse === 'accelerator' && (p.tier === 'gold' || p.courseId === 'accelerator')) ||
+            (memberCourse === 'mastery' && (p.tier === 'diamond' || p.courseId === 'mastery')) ||
+            memberCourse === p.tier;
+
+          if (matchesSearch && matchesCourse) {
+            combined.push(p);
           }
-        });
-      });
-      setCoursesList(Array.from(coursesMap.entries()).map(([id, title]) => ({ id, title })));
+        }
+      }
+
+      if (memberSort === 'alphabetical') {
+        combined.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      setMembers(combined);
+
+      setCoursesList([
+        { id: 'blueprint', title: 'Food Business Blueprint (Silver Tier)' },
+        { id: 'accelerator', title: 'Food Business Accelerator (Gold Tier)' },
+        { id: 'mastery', title: 'Food Business Mastery (Diamond Tier)' },
+      ]);
     } catch (e) {
       console.error('Failed to load members:', e);
     } finally {
@@ -422,13 +458,62 @@ export function Community() {
           {/* ═════════════════ TAB 2: ENROLLED MEMBERS & PROGRESS ═════════════════ */}
           {activeTab === 'members' && (
             <div className="enrolled-members-section">
+              {/* Member Tier Cohort Banner */}
+              <div className="user-tier-cohort-banner">
+                <div className="cohort-banner-left">
+                  <Sparkles size={17} className="cohort-star" />
+                  <div>
+                    <h4>Founder Peer Directory &amp; Tiers</h4>
+                    <p>
+                      Connect with fellow founders in your stage. Filter specifically by <strong>Silver Tier</strong> to see other Silver members, or explore Gold &amp; Diamond MSMEs.
+                    </p>
+                  </div>
+                </div>
+                <div className="cohort-quick-actions">
+                  <button
+                    className={`button small ${memberCourse === 'blueprint' ? 'primary' : 'outline'}`}
+                    onClick={() => setMemberCourse(memberCourse === 'blueprint' ? 'all' : 'blueprint')}
+                  >
+                    <Award size={15} /> {memberCourse === 'blueprint' ? 'Showing Silver Members' : 'Filter Silver Members'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tier Quick Filter Tabs */}
+              <div className="member-tier-pills-row">
+                <button
+                  className={`member-tier-pill ${memberCourse === 'all' ? 'active' : ''}`}
+                  onClick={() => setMemberCourse('all')}
+                >
+                  <Users size={14} /> All Founders ({members.length})
+                </button>
+                <button
+                  className={`member-tier-pill silver ${memberCourse === 'blueprint' ? 'active' : ''}`}
+                  onClick={() => setMemberCourse('blueprint')}
+                >
+                  <Award size={14} /> 🥈 Silver Tier Founders
+                </button>
+                <button
+                  className={`member-tier-pill gold ${memberCourse === 'accelerator' ? 'active' : ''}`}
+                  onClick={() => setMemberCourse('accelerator')}
+                >
+                  <Award size={14} /> 👑 Gold Tier Founders
+                </button>
+                <button
+                  className={`member-tier-pill diamond ${memberCourse === 'mastery' ? 'active' : ''}`}
+                  onClick={() => setMemberCourse('mastery')}
+                >
+                  <Award size={14} /> 💎 Diamond Tier Founders
+                </button>
+              </div>
+
               {/* Member Search & Filters */}
               <div className="members-filter-bar">
                 <div className="members-search-wrapper">
                   <Search size={18} className="search-icon" />
                   <input
                     type="text"
-                    placeholder="Search members by name, @handle, headline, or programme..."
+                    placeholder="Search founders by name, @handle, recipe, or location..."
                     value={memberSearch}
                     onChange={e => setMemberSearch(e.target.value)}
                   />
@@ -440,22 +525,6 @@ export function Community() {
                 </div>
 
                 <div className="members-filter-controls">
-                  {coursesList.length > 0 && (
-                    <label className="member-filter-label">
-                      <span>Programme:</span>
-                      <select 
-                        value={memberCourse} 
-                        onChange={e => setMemberCourse(e.target.value)}
-                        className="member-select"
-                      >
-                        <option value="all">All Programmes</option>
-                        {coursesList.map(c => (
-                          <option key={c.id} value={c.id}>{c.title}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
                   <label className="member-filter-label">
                     <span>Sort by:</span>
                     <select 

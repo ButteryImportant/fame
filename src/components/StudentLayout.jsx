@@ -1,5 +1,5 @@
 import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Compass, Settings, Layers, LogOut, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Compass, Settings, Layers, LogOut, MessageSquare, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Brand } from './shared';
 import { ThemeToggle } from './ThemeToggle';
@@ -15,6 +15,10 @@ export function StudentLayout({ children }) {
           <NavLink to="/dashboard">
             <LayoutDashboard size={19} />
             Overview
+          </NavLink>
+          <NavLink to="/community?tab=members">
+            <Users size={19} />
+            Founder Network
           </NavLink>
           <NavLink to="/community">
             <MessageSquare size={19} />

@@ -3871,3 +3871,569 @@
   border-color: #1b4437;
   color: #fff;
 }
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   THEME PERSONALIZATION SYSTEM (Sepia Paper · Nordic Slate · Royal Amethyst)
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Theme Picker Wrapper & Floating Popover ──────────────────────────────── */
+.theme-picker-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.theme-toggle-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.theme-picker-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 16px;
+  z-index: 120;
+  animation: floatUpBounce 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--ink);
+}
+
+.theme-picker-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.theme-picker-header h4 {
+  font-size: 0.95rem;
+  margin: 0 0 2px;
+}
+
+.theme-picker-header p {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.close-theme-btn {
+  width: 28px;
+  height: 28px;
+}
+
+.theme-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.theme-option-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--soft);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.theme-option-card:hover {
+  border-color: #bed6c8;
+  transform: translateX(2px);
+}
+
+.theme-option-card.active {
+  border-color: var(--green);
+  background: #edf7f2;
+  box-shadow: 0 0 0 1px var(--green);
+}
+
+.theme-preview-palette {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 38px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.theme-preview-palette span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  position: absolute;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.theme-preview-palette .swatch-bg {
+  left: 0;
+  z-index: 1;
+}
+
+.theme-preview-palette .swatch-primary {
+  left: 10px;
+  z-index: 2;
+}
+
+.theme-preview-palette .swatch-accent {
+  left: 20px;
+  z-index: 3;
+}
+
+.theme-option-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.theme-option-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.theme-option-title-row strong {
+  font-size: 0.84rem;
+  color: var(--ink);
+}
+
+.theme-check-icon {
+  color: var(--green);
+}
+
+.theme-option-info small {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   1. WARM SEPIA PAPER THEME ([data-theme="sepia"])
+   ═════════════════════════════════════════════════════════════════════════════ */
+[data-theme="sepia"] {
+  background-color: #fcf8f2;
+  color: #2c231b;
+  --ink: #2c231b;
+  --muted: #7a6b5e;
+  --green: #b45309;
+  --dark: #241910;
+  --lime: #fde68a;
+  --line: #eadfce;
+  --soft: #f5ede0;
+}
+
+[data-theme="sepia"] body {
+  background-color: #fcf8f2;
+  color: #2c231b;
+}
+
+[data-theme="sepia"] .site-header,
+[data-theme="sepia"] .theme-picker-popover,
+[data-theme="sepia"] .course-card,
+[data-theme="sepia"] .course-leaderboard-container,
+[data-theme="sepia"] .member-card,
+[data-theme="sepia"] .doubt-card,
+[data-theme="sepia"] .account-panel,
+[data-theme="sepia"] .leaderboard-row {
+  background: #fffdfa;
+  border-color: #eadfce;
+}
+
+[data-theme="sepia"] .student-layout,
+[data-theme="sepia"] .programmes-section,
+[data-theme="sepia"] .experience-strip {
+  background: #f7f1e4;
+  border-color: #eadfce;
+}
+
+[data-theme="sepia"] .student-sidebar,
+[data-theme="sepia"] .lesson-sidebar {
+  background: #f5ede0;
+  border-color: #eadfce;
+}
+
+[data-theme="sepia"] .button.primary,
+[data-theme="sepia"] .button {
+  background: #b45309;
+  border-color: #b45309;
+  color: #fff;
+}
+
+[data-theme="sepia"] .button.primary:hover,
+[data-theme="sepia"] .button:hover {
+  background: #92400e;
+}
+
+[data-theme="sepia"] .theme-option-card.active {
+  border-color: #b45309;
+  background: #fdf5e8;
+  box-shadow: 0 0 0 1px #b45309;
+}
+
+[data-theme="sepia"] .theme-check-icon {
+  color: #b45309;
+}
+
+[data-theme="sepia"] .learn-header {
+  background: #fbf7ee;
+  border-color: #eadfce;
+}
+
+[data-theme="sepia"] .cinema-container {
+  background: #140d08;
+  border-color: #3b2413;
+}
+
+[data-theme="sepia"] .cinema-bar {
+  background: #1f150d;
+  border-color: #3b2413;
+  color: #fef3c7;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   2. NORDIC SLATE / CYBER BLUE THEME ([data-theme="slate"])
+   ═════════════════════════════════════════════════════════════════════════════ */
+[data-theme="slate"] {
+  background-color: #0b1120;
+  color: #f1f5f9;
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+  --green: #0284c7;
+  --dark: #020617;
+  --lime: #38bdf8;
+  --line: #1e293b;
+  --soft: #131e32;
+}
+
+[data-theme="slate"] body {
+  background-color: #0b1120;
+  color: #f1f5f9;
+}
+
+[data-theme="slate"] .site-header,
+[data-theme="slate"] .theme-picker-popover,
+[data-theme="slate"] .course-card,
+[data-theme="slate"] .course-leaderboard-container,
+[data-theme="slate"] .member-card,
+[data-theme="slate"] .doubt-card,
+[data-theme="slate"] .account-panel,
+[data-theme="slate"] .leaderboard-row {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #f8fafc;
+}
+
+[data-theme="slate"] .student-layout,
+[data-theme="slate"] .programmes-section,
+[data-theme="slate"] .experience-strip {
+  background: #080d19;
+  border-color: #1e293b;
+}
+
+[data-theme="slate"] .student-sidebar,
+[data-theme="slate"] .lesson-sidebar {
+  background: #0d1527;
+  border-color: #1e293b;
+}
+
+[data-theme="slate"] .button.primary,
+[data-theme="slate"] .button {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #fff;
+}
+
+[data-theme="slate"] .button.primary:hover,
+[data-theme="slate"] .button:hover {
+  background: #0369a1;
+}
+
+[data-theme="slate"] .learn-header {
+  background: #0d1527;
+  border-color: #1e293b;
+}
+
+[data-theme="slate"] .cinema-container {
+  background: #020617;
+  border-color: #0f172a;
+}
+
+[data-theme="slate"] .cinema-bar {
+  background: #070e1d;
+  border-color: #1e293b;
+  color: #38bdf8;
+}
+
+[data-theme="slate"] .theme-option-card.active {
+  border-color: #38bdf8;
+  background: #112642;
+  box-shadow: 0 0 0 1px #38bdf8;
+}
+
+[data-theme="slate"] .theme-check-icon {
+  color: #38bdf8;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   3. ROYAL AMETHYST THEME ([data-theme="amethyst"])
+   ═════════════════════════════════════════════════════════════════════════════ */
+[data-theme="amethyst"] {
+  background-color: #0e0b16;
+  color: #f3f0fa;
+  --ink: #faf7ff;
+  --muted: #a396bf;
+  --green: #9333ea;
+  --dark: #07050b;
+  --lime: #c084fc;
+  --line: #271f3b;
+  --soft: #181326;
+}
+
+[data-theme="amethyst"] body {
+  background-color: #0e0b16;
+  color: #f3f0fa;
+}
+
+[data-theme="amethyst"] .site-header,
+[data-theme="amethyst"] .theme-picker-popover,
+[data-theme="amethyst"] .course-card,
+[data-theme="amethyst"] .course-leaderboard-container,
+[data-theme="amethyst"] .member-card,
+[data-theme="amethyst"] .doubt-card,
+[data-theme="amethyst"] .account-panel,
+[data-theme="amethyst"] .leaderboard-row {
+  background: #151022;
+  border-color: #271f3b;
+  color: #faf7ff;
+}
+
+[data-theme="amethyst"] .student-layout,
+[data-theme="amethyst"] .programmes-section,
+[data-theme="amethyst"] .experience-strip {
+  background: #09070f;
+  border-color: #271f3b;
+}
+
+[data-theme="amethyst"] .student-sidebar,
+[data-theme="amethyst"] .lesson-sidebar {
+  background: #120e1c;
+  border-color: #271f3b;
+}
+
+[data-theme="amethyst"] .button.primary,
+[data-theme="amethyst"] .button {
+  background: #9333ea;
+  border-color: #9333ea;
+  color: #fff;
+}
+
+[data-theme="amethyst"] .button.primary:hover,
+[data-theme="amethyst"] .button:hover {
+  background: #7e22ce;
+}
+
+[data-theme="amethyst"] .learn-header {
+  background: #120e1c;
+  border-color: #271f3b;
+}
+
+[data-theme="amethyst"] .cinema-container {
+  background: #050408;
+  border-color: #1e162f;
+}
+
+[data-theme="amethyst"] .cinema-bar {
+  background: #0d0a14;
+  border-color: #271f3b;
+  color: #c084fc;
+}
+
+[data-theme="amethyst"] .theme-option-card.active {
+  border-color: #c084fc;
+  background: #25173f;
+  box-shadow: 0 0 0 1px #c084fc;
+}
+
+[data-theme="amethyst"] .theme-check-icon {
+  color: #c084fc;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   COMMUNITY MEMBERS TIER FILTER & COHORT BANNER STYLES
+   ═════════════════════════════════════════════════════════════════════════════ */
+.user-tier-cohort-banner {
+  background: linear-gradient(135deg, #edf7f2 0%, #e0ede5 100%);
+  border: 1.5px solid #b7dcbe;
+  border-radius: 14px;
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.cohort-banner-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.cohort-star {
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.cohort-banner-left h4 {
+  font-size: 0.98rem;
+  margin: 0 0 3px;
+  color: var(--ink);
+}
+
+.cohort-banner-left p {
+  font-size: 0.82rem;
+  color: #4a5e52;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cohort-quick-actions {
+  flex-shrink: 0;
+}
+
+/* Tier Pills Carousel */
+.member-tier-pills-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.member-tier-pills-row::-webkit-scrollbar {
+  display: none;
+}
+
+.member-tier-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1.5px solid var(--line);
+  background: var(--soft);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.member-tier-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.member-tier-pill.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(18, 89, 69, 0.2);
+}
+
+.member-tier-pill.silver.active {
+  background: linear-gradient(135deg, #475569, #334155);
+  border-color: #475569;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(71, 85, 105, 0.25);
+}
+
+.member-tier-pill.gold.active {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border-color: #d97706;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.25);
+}
+
+.member-tier-pill.diamond.active {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  border-color: #0284c7;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
+}
+
+/* Member Card Enhancements */
+.member-card {
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.member-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+
+.member-view-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: 1px solid var(--line);
+  transition: all 0.2s ease;
+}
+
+.member-view-profile-btn:hover {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+}
+
+/* Dark mode overrides for cohort banner */
+[data-theme="dark"] .user-tier-cohort-banner {
+  background: linear-gradient(135deg, #09231c 0%, #0f362c 100%);
+  border-color: #1e5948;
+}
+
+[data-theme="dark"] .cohort-banner-left p {
+  color: #a7c5b6;
+}
+
+[data-theme="dark"] .member-view-profile-btn {
+  background: #0f2b23;
+  color: #c5ee8b;
+  border-color: #1e5040;
+}
+
+[data-theme="dark"] .member-view-profile-btn:hover {
+  background: var(--green);
+  color: #fff;
+}

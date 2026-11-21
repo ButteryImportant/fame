@@ -11,6 +11,7 @@ import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { Loader } from '../components/shared';
 import { api } from '../api.js';
+import { getPeerProfile } from '../utils/xpSystem';
 
 function timeAgo(dateOrEpoch) {
   const diff = Date.now() - Number(dateOrEpoch);
@@ -38,7 +39,12 @@ export function PublicProfile() {
       const res = await api(`/u/${handle}`);
       setProfileData(res);
     } catch (e) {
-      setError(e.message || 'Profile not found.');
+      const fallback = getPeerProfile(handle);
+      if (fallback) {
+        setProfileData(fallback);
+      } else {
+        setError(e.message || 'Profile not found.');
+      }
     } finally {
       setLoading(false);
     }

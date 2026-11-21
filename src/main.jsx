@@ -156,6 +156,8 @@ function App() {
             <Route path="/courses/:slug" element={<CourseDetail />} />
             <Route path="/community" element={<Community />} />
             <Route path="/community/:postId" element={<CommunityPost />} />
+            <Route path="/members" element={<Community />} />
+            <Route path="/network" element={<Community />} />
             <Route path="/u/:handle" element={<PublicProfile />} />
             <Route path="/login" element={<AuthPage />} />
             <Route path="/register" element={<AuthPage mode="register" />} />

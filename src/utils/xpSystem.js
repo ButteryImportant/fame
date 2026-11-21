@@ -463,3 +463,136 @@ export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null,
     totalParticipants: rankedList.length,
   };
 }
+
+
+// ─── Get Peer Member Profile (Fallback & Rich Profiles) ───────────────────────
+export function getPeerProfile(handle) {
+  if (!handle) return null;
+  const h = handle.toLowerCase().replace(/^@/, '').trim();
+
+  for (const [tierKey, list] of Object.entries(PEER_ENTREPRENEURS)) {
+    const peer = list.find((p) => p.handle.toLowerCase() === h);
+    if (peer) {
+      const course = COURSE_TIERS[tierKey === 'silver' ? 'blueprint' : tierKey === 'gold' ? 'accelerator' : 'mastery'];
+      return {
+        profile: {
+          user_id: peer.id,
+          name: peer.name,
+          handle: peer.handle,
+          headline: peer.headline,
+          bio: `${peer.name} is a dedicated food entrepreneur in the FAME founder network. Validating formulation, unit economics, packaging and distribution for ${peer.headline.toLowerCase()}.`,
+          location: peer.location,
+          business_stage:
+            peer.lessonsCompleted >= peer.totalLessons
+              ? 'Commercial Scale'
+              : peer.lessonsCompleted > 6
+                ? 'Pilot Batch Validated'
+                : 'Formulation Stage',
+          website: `https://${peer.handle}.foodventures.in`,
+          linkedin: peer.handle,
+          instagram: peer.handle,
+          member_since: 1715000000000 + peer.baseXP * 100000,
+          role: 'founder',
+        },
+        badges: [
+          {
+            id: `${tierKey}_tier`,
+            title: `${course.tierName} Member`,
+            description: `Enrolled in ${course.title}`,
+            icon: 'Award',
+          },
+          {
+            id: 'validated_founder',
+            title: 'Food Business Founder',
+            description: 'Active validation & market testing',
+            icon: 'CheckCircle2',
+          },
+          {
+            id: 'xp_pioneer',
+            title: `${peer.baseXP} Founder XP`,
+            description: 'Earned 2 XP/min watching masterclass sessions',
+            icon: 'Sparkles',
+          },
+        ],
+        stats: {
+          totalXP: peer.baseXP,
+          lessonsCompleted: peer.lessonsCompleted,
+          questionsAsked: 2 + (peer.lessonsCompleted % 4),
+          solutionsShared: 3 + (peer.lessonsCompleted % 3),
+        },
+        enrolledCourses: [
+          {
+            id: course.id,
+            slug:
+              course.id === 'blueprint'
+                ? 'food-business-blueprint'
+                : course.id === 'accelerator'
+                  ? 'food-business-accelerator'
+                  : 'food-business-mastery',
+            title: course.title,
+            eyebrow: course.eyebrow,
+            level: course.level,
+            accent: course.accent,
+          },
+        ],
+        recentPosts: [
+          {
+            id: `post-${peer.id}`,
+            title: `Key learnings on packaging barrier and shelf-life testing for ${peer.headline.split('·')[0]}`,
+            category: 'Packaging & Compliance',
+            is_resolved: 1,
+            reply_count: 4,
+            upvotes: 9,
+            created_at: Date.now() - 86400000 * 5,
+          },
+        ],
+      };
+    }
+  }
+  return null;
+}
+
+// ─── Get All Peer Members (Structured by Tier) ──────────────────────────────
+export function getAllPeerMembers() {
+  const all = [];
+  for (const [tierKey, list] of Object.entries(PEER_ENTREPRENEURS)) {
+    const course = COURSE_TIERS[tierKey === 'silver' ? 'blueprint' : tierKey === 'gold' ? 'accelerator' : 'mastery'];
+    list.forEach((p) => {
+      all.push({
+        id: p.id,
+        name: p.name,
+        handle: p.handle,
+        headline: p.headline,
+        location: p.location,
+        avatar_url: p.avatar_url,
+        avatarBg: p.avatarBg,
+        business_stage:
+          p.lessonsCompleted >= p.totalLessons
+            ? 'Commercial Scale'
+            : p.lessonsCompleted > 6
+              ? 'Pilot Batch Validated'
+              : 'Formulation Stage',
+        role: 'founder',
+        tier: tierKey,
+        tierName: course.tierName,
+        courseId: course.id,
+        enrolled_courses: [
+          {
+            id: course.id,
+            title: course.title,
+            eyebrow: course.eyebrow,
+            level: course.level,
+            accent: course.accent,
+            slug:
+              course.id === 'blueprint'
+                ? 'food-business-blueprint'
+                : course.id === 'accelerator'
+                  ? 'food-business-accelerator'
+                  : 'food-business-mastery',
+          },
+        ],
+      });
+    });
+  }
+  return all;
+}
