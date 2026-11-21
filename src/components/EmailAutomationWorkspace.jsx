@@ -29,6 +29,10 @@ import {
   FileText,
   CornerDownRight,
   Info,
+  Settings,
+  Key,
+  Globe,
+  Shield,
 } from 'lucide-react';
 
 // ─── 5 PRE-FIXED HIGH-CONVERTING TEMPLATES ──────────────────────────────────
@@ -181,15 +185,37 @@ Founder & Chief Mentor, FAME`,
 // ─── RECOMMENDED EMAIL TOOLS DATA ───────────────────────────────────────────
 const RECOMMENDED_TOOLS = [
   {
+    id: 'brevo',
+    name: 'Brevo (Connected & Integrated)',
+    tagline: 'Official active delivery engine for FAME cohort broadcasts & transactional emails',
+    badge: 'Connected & Active',
+    badgeColor: 'emerald',
+    website: 'https://brevo.com',
+    freeTier: '300 emails/day forever (9,000 emails/month free!) with unlimited contacts',
+    pricing: 'Starts at $25/month for 20,000 emails without daily send limits',
+    rating: '9.9/10',
+    pros: [
+      'Direct REST API v3 integration with real-time send status and message IDs',
+      'Generous 300 emails/day completely free forever with zero contact caps',
+      'Pre-configured SMTP Relay (smtp-relay.brevo.com:587) for server auth emails',
+      'Dedicated delivery analytics, bounce handling, and open tracking on app.brevo.com',
+    ],
+    cons: ['Sender email must be verified in Brevo before sending live messages'],
+    setupSnippet: `// Live Brevo Integration Configured in FAME
+// 1. Transactional API: https://api.brevo.com/v3/smtp/email
+// 2. SMTP Relay: smtp-relay.brevo.com:587 (secure: false)
+// 3. Sender: Manmath Biradar <mentor@foodbusinesscoach.online>`,
+  },
+  {
     id: 'resend',
     name: 'Resend',
     tagline: 'Modern developer-first email platform for SaaS & modern web apps',
-    badge: 'Top Pick · SaaS',
-    badgeColor: 'emerald',
+    badge: 'Alternative Pick',
+    badgeColor: 'blue',
     website: 'https://resend.com',
     freeTier: '3,000 emails/month free (100 emails/day)',
     pricing: 'Starts at $20/month for 50,000 emails',
-    rating: '9.9/10',
+    rating: '9.7/10',
     pros: [
       'Built-in React Email components with responsive HTML',
       'Industry-leading 99.8% inbox deliverability',
@@ -202,30 +228,6 @@ SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
 SMTP_USER=resend
 SMTP_PASS=re_your_api_key_here
-MAIL_FROM=Manmath Biradar <mentor@foodbusinesscoach.online>`,
-  },
-  {
-    id: 'brevo',
-    name: 'Brevo (formerly Sendinblue)',
-    tagline: 'Best value for high-volume drip campaigns and transactional delivery',
-    badge: 'Best Free Tier',
-    badgeColor: 'amber',
-    website: 'https://brevo.com',
-    freeTier: '300 emails/day forever (9,000 emails/month free!) with unlimited contacts',
-    pricing: 'Starts at $25/month for 20,000 emails without daily send limits',
-    rating: '9.6/10',
-    pros: [
-      'Generous 300 emails/day completely free forever',
-      'Visual drag-and-drop drip automation journey builder',
-      'Both transactional SMTP and marketing newsletters in one account',
-      'SMS & WhatsApp marketing add-on support',
-    ],
-    cons: ['Free plan includes a small "Sent with Brevo" footer badge'],
-    setupSnippet: `// .env configuration for Brevo SMTP
-SMTP_HOST=smtp-relay.brevo.com
-SMTP_PORT=587
-SMTP_USER=your_brevo_login_email@domain.com
-SMTP_PASS=your_brevo_smtp_master_key
 MAIL_FROM=Manmath Biradar <mentor@foodbusinesscoach.online>`,
   },
   {
@@ -365,6 +367,34 @@ export function EmailAutomationWorkspace({
     } catch {}
     return [];
   });
+
+  // Brevo Email Integration State
+  const [brevoConfig, setBrevoConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fame_brevo_config');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      apiKey: '',
+      senderName: 'Manmath Biradar',
+      senderEmail: 'mentor@foodbusinesscoach.online',
+      smtpHost: 'smtp-relay.brevo.com',
+      smtpPort: 587,
+      verified: false,
+      lastChecked: null,
+      accountEmail: null,
+      companyName: null,
+      planType: 'Free (300 emails/day)',
+      credits: 300,
+    };
+  });
+
+  const [showBrevoModal, setShowBrevoModal] = useState(false);
+  const [isTestingBrevo, setIsTestingBrevo] = useState(false);
+  const [brevoApiKeyInput, setBrevoApiKeyInput] = useState(brevoConfig.apiKey || '');
+  const [brevoSenderNameInput, setBrevoSenderNameInput] = useState(brevoConfig.senderName || 'Manmath Biradar');
+  const [brevoSenderEmailInput, setBrevoSenderEmailInput] = useState(brevoConfig.senderEmail || 'mentor@foodbusinesscoach.online');
+  const [brevoTestStatus, setBrevoTestStatus] = useState(null);
 
   const bodyRef = useRef(null);
   const subjectRef = useRef(null);
@@ -593,33 +623,214 @@ export function EmailAutomationWorkspace({
     window.location.href = `mailto:?bcc=${bcc}&subject=${subject}&body=${body}`;
   };
 
-  // ─── 5. BROADCAST DISPATCH & HISTORY ──────────────────────────────────────
+  // ─── 5. BREVO INTEGRATION HELPERS & DISPATCH ─────────────────────────────
+  const testBrevoConnection = async (keyOverride = null) => {
+    const key = (keyOverride ?? brevoApiKeyInput).trim();
+    if (!key) {
+      showToast('Please enter your Brevo API key to test.', 'error');
+      return false;
+    }
+    setIsTestingBrevo(true);
+    setBrevoTestStatus(null);
+    try {
+      const res = await fetch('https://api.brevo.com/v3/account', {
+        headers: {
+          'accept': 'application/json',
+          'api-key': key,
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.email) {
+        const updated = {
+          ...brevoConfig,
+          apiKey: key,
+          senderName: brevoSenderNameInput.trim() || 'Manmath Biradar',
+          senderEmail: brevoSenderEmailInput.trim() || 'mentor@foodbusinesscoach.online',
+          verified: true,
+          lastChecked: Date.now(),
+          accountEmail: data.email,
+          companyName: data.companyName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'FAME Academy',
+          planType: data.plan?.[0]?.type || 'Free (300/day)',
+          credits: data.plan?.[0]?.credits ?? 300,
+        };
+        setBrevoConfig(updated);
+        localStorage.setItem('fame_brevo_config', JSON.stringify(updated));
+        setBrevoTestStatus({ ok: true, message: `Connected to ${data.email} (${updated.planType})` });
+        showToast(`Connected to Brevo account: ${data.email}! Ready to broadcast. 🎉`);
+        return true;
+      } else {
+        const msg = data.message || 'Invalid Brevo API key or unauthorized.';
+        setBrevoTestStatus({ ok: false, message: msg });
+        showToast(msg, 'error');
+        return false;
+      }
+    } catch (err) {
+      const msg = `Connection error: ${err.message}`;
+      setBrevoTestStatus({ ok: false, message: msg });
+      showToast(msg, 'error');
+      return false;
+    } finally {
+      setIsTestingBrevo(false);
+    }
+  };
+
+  const handleSaveBrevoSettings = () => {
+    const updated = {
+      ...brevoConfig,
+      apiKey: brevoApiKeyInput.trim(),
+      senderName: brevoSenderNameInput.trim() || 'Manmath Biradar',
+      senderEmail: brevoSenderEmailInput.trim() || 'mentor@foodbusinesscoach.online',
+    };
+    setBrevoConfig(updated);
+    localStorage.setItem('fame_brevo_config', JSON.stringify(updated));
+    setShowBrevoModal(false);
+    showToast('Brevo settings saved successfully.');
+  };
+
+  const sendBrevoEmail = async (toEmail, toName, subject, htmlContent, textContent) => {
+    const apiKey = brevoConfig.apiKey.trim();
+    if (!apiKey) {
+      throw new Error('Brevo API key is missing. Click "Configure Brevo" to paste your key.');
+    }
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: brevoConfig.senderName || 'Manmath Biradar',
+          email: brevoConfig.senderEmail || 'mentor@foodbusinesscoach.online',
+        },
+        to: [{ email: toEmail, name: toName || 'Founder' }],
+        subject: subject,
+        htmlContent: htmlContent,
+        textContent: textContent,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || `Brevo API HTTP ${res.status}`);
+    }
+    return data;
+  };
+
+  const buildBrevoHtml = (bodyText, learner) => {
+    const paragraphs = bodyText
+      .split('\n\n')
+      .map((p) => `<p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.65; color: #1e293b;">${p.replace(/\n/g, '<br/>')}</p>`)
+      .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding: 24px 32px; background-color: #0b221e; border-bottom: 2px solid #218464;">
+              <span style="color: #c5ee8b; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;">FOOD &amp; AGRO MASTERY ENTERPRISE</span>
+              <h2 style="margin: 6px 0 0; color: #ffffff; font-size: 19px; font-weight: 600;">FAME Founder Mentorship Communication</h2>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 32px 24px 32px;">
+              ${paragraphs}
+              <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 14px; font-weight: 600; color: #0f172a;">${brevoConfig.senderName || 'Manmath Biradar'}</p>
+                <p style="margin: 2px 0 0; font-size: 13px; color: #64748b;">Founder &amp; Chief Mentor · FAME Platform</p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 18px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                You are receiving this communication as an enrolled founder in FAME (${learner?.courses?.[0]?.title || 'Mentorship Programme'}).
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  };
+
   const handleSendBroadcast = async () => {
     if (selectedCount === 0) {
       showToast('Please select at least 1 recipient to broadcast.', 'error');
       return;
     }
-    setShowConfirmModal(false);
-    setIsSending(true);
-    setSendProgress(10);
 
-    // Simulate batch dispatch progress
-    const totalSteps = 5;
-    for (let i = 1; i <= totalSteps; i++) {
-      await new Promise((r) => setTimeout(r, 350));
-      setSendProgress(Math.min(95, i * 20));
+    setShowConfirmModal(false);
+
+    // If Brevo API key is not configured, open Brevo configuration modal
+    if (!brevoConfig.apiKey.trim()) {
+      setShowBrevoModal(true);
+      showToast('Please connect your Brevo API key to enable live email delivery.', 'info');
+      return;
+    }
+
+    setIsSending(true);
+    setSendProgress(5);
+
+    const total = selectedLearners.length;
+    const messageIds = [];
+    let successfulSends = 0;
+    let failedSends = 0;
+
+    for (let i = 0; i < total; i++) {
+      const learner = selectedLearners[i];
+      const personalizedSubject = resolveTokens(emailSubject, learner);
+      const personalizedBody = resolveTokens(emailBody, learner);
+      const personalizedHtml = buildBrevoHtml(personalizedBody, learner);
+
+      try {
+        const res = await sendBrevoEmail(
+          learner.email,
+          learner.name,
+          personalizedSubject,
+          personalizedHtml,
+          personalizedBody
+        );
+        if (res && res.messageId) {
+          messageIds.push(res.messageId);
+        }
+        successfulSends++;
+      } catch (err) {
+        console.error(`Failed to send email to ${learner.email} via Brevo:`, err);
+        failedSends++;
+      }
+
+      const currentPercent = Math.min(95, Math.round(((i + 1) / total) * 100));
+      setSendProgress(currentPercent);
+      if (i < total - 1) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
     }
 
     // Record into broadcast history
     const record = {
-      id: `bc-${Date.now()}`,
+      id: `bc-brevo-${Date.now()}`,
       timestamp: Date.now(),
       tierLabel: currentTierInfo.title,
       tierKey: selectedTier,
       subject: emailSubject,
       recipientCount: selectedCount,
+      successCount: successfulSends,
+      failCount: failedSends,
       recipients: selectedLearners.map((u) => ({ name: u.name, email: u.email })),
-      status: 'Delivered (100%)',
+      deliveryEngine: 'Brevo Transactional API (Live)',
+      status: failedSends === 0 ? 'Delivered via Brevo (100%)' : `Delivered (${successfulSends}/${total} sent)`,
+      messageIds: messageIds.slice(0, 5),
     };
 
     const updatedHistory = [record, ...broadcastHistory];
@@ -630,12 +841,38 @@ export function EmailAutomationWorkspace({
     await new Promise((r) => setTimeout(r, 400));
     setIsSending(false);
     setSendProgress(0);
-    showToast(`Broadcast sent successfully to ${selectedCount} verified members! 🎉`);
+
+    if (failedSends === 0) {
+      showToast(`Broadcast delivered to all ${successfulSends} founders via Brevo API! 🚀`);
+    } else {
+      showToast(`Broadcast completed: ${successfulSends} delivered, ${failedSends} failed via Brevo.`, 'warning');
+    }
   };
 
-  const handleSendTestToSelf = () => {
-    const targetEmail = currentUser?.email || 'owner@fameplatform.com';
-    showToast(`Test preview delivered to ${targetEmail} (Simulated).`);
+  const handleSendTestToSelf = async () => {
+    const targetEmail = currentUser?.email || brevoConfig.senderEmail || 'mentor@foodbusinesscoach.online';
+    if (!brevoConfig.apiKey.trim()) {
+      setShowBrevoModal(true);
+      showToast('Add your Brevo API key to send live test emails directly to your inbox.', 'info');
+      return;
+    }
+
+    showToast(`Dispatching live Brevo test email to ${targetEmail}...`, 'info');
+    try {
+      const dummyLearner = {
+        name: currentUser?.name || 'Manmath Biradar (Test)',
+        email: targetEmail,
+        courses: [{ title: 'Silver Tier Food Business Blueprint', percent: 75 }],
+      };
+      const testSubj = `[TEST PREVIEW] ` + resolveTokens(emailSubject, dummyLearner);
+      const testBody = resolveTokens(emailBody, dummyLearner);
+      const testHtml = buildBrevoHtml(testBody, dummyLearner);
+
+      const res = await sendBrevoEmail(targetEmail, dummyLearner.name, testSubj, testHtml, testBody);
+      showToast(`Live test email delivered to ${targetEmail} via Brevo! (ID: ${res.messageId ? res.messageId.substring(0, 16) + '...' : 'OK'}) 🎉`);
+    } catch (err) {
+      showToast(`Brevo test email failed: ${err.message}`, 'error');
+    }
   };
 
   // Toggle selection for all filtered users
@@ -708,6 +945,55 @@ export function EmailAutomationWorkspace({
             <span className="stat-sub">Mastery</span>
           </div>
         </div>
+
+        {/* ── BREVO ACTIVE INTEGRATION STATUS STRIP ─────────────────── */}
+        <div className="brevo-integration-strip">
+          <div className="brevo-strip-left">
+            <div className="brevo-brand-pill">
+              <Zap size={14} className="brevo-zap" />
+              <strong>Brevo Email Engine</strong>
+            </div>
+            <div className="brevo-status-tag">
+              {brevoConfig.verified ? (
+                <span className="brevo-indicator active">
+                  <CheckCircle2 size={12} /> Active ({brevoConfig.accountEmail || 'Connected'})
+                </span>
+              ) : brevoConfig.apiKey ? (
+                <span className="brevo-indicator ready">
+                  <Check size={12} /> Key Configured
+                </span>
+              ) : (
+                <span className="brevo-indicator setup">
+                  <AlertCircle size={12} /> Setup Required
+                </span>
+              )}
+            </div>
+            <span className="brevo-detail-item">
+              Sender: <strong>{brevoConfig.senderEmail}</strong>
+            </span>
+            <span className="brevo-detail-item">
+              Relay: <code>smtp-relay.brevo.com:587</code>
+            </span>
+            <span className="brevo-detail-item quota-tag">
+              Daily Quota: <strong>300 free emails/day</strong>
+            </span>
+          </div>
+          <div className="brevo-strip-right">
+            <button
+              type="button"
+              className="button small outline brevo-manage-btn"
+              onClick={() => {
+                setBrevoApiKeyInput(brevoConfig.apiKey || '');
+                setBrevoSenderNameInput(brevoConfig.senderName || 'Manmath Biradar');
+                setBrevoSenderEmailInput(brevoConfig.senderEmail || 'mentor@foodbusinesscoach.online');
+                setShowBrevoModal(true);
+              }}
+            >
+              <Settings size={13} />
+              Configure Brevo
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ── WORKSPACE SUB-NAVIGATION ─────────────────────────────────── */}
@@ -742,7 +1028,7 @@ export function EmailAutomationWorkspace({
           onClick={() => setActiveTab('tools')}
         >
           <Zap size={15} />
-          Recommended Tools &amp; Setup Guide
+          Brevo Setup &amp; DNS Guide
         </button>
         <button
           type="button"
@@ -1001,7 +1287,7 @@ export function EmailAutomationWorkspace({
                 <div className="sender-note">
                   <ShieldCheck size={14} />
                   <span>
-                    Sending from: <strong>Manmath Biradar &lt;mentor@foodbusinesscoach.online&gt;</strong>
+                    Sending via <strong>Brevo API</strong> as: <strong>{brevoConfig.senderName} &lt;{brevoConfig.senderEmail}&gt;</strong>
                   </span>
                 </div>
 
@@ -1010,10 +1296,10 @@ export function EmailAutomationWorkspace({
                     type="button"
                     className="button outline"
                     onClick={handleSendTestToSelf}
-                    title="Send a sample email to owner address"
+                    title="Send a sample email via Brevo to owner address"
                   >
                     <Mail size={15} />
-                    Send Test Preview
+                    Send Test Preview (Brevo)
                   </button>
 
                   <button
@@ -1481,15 +1767,15 @@ export function EmailAutomationWorkspace({
             ))}
           </div>
 
-          {/* DELIVERABILITY BEST PRACTICES & DNS CHECKLIST */}
+          {/* DELIVERABILITY BEST PRACTICES & BREVO DNS CHECKLIST */}
           <div className="dns-guide-card">
             <div className="dns-guide-header">
               <ShieldCheck size={20} />
               <div>
-                <h3>Domain Deliverability &amp; DNS Records Checklist (Prevent Spam Folders)</h3>
+                <h3>Brevo Domain Deliverability &amp; DNS Records Checklist (Prevent Spam Folders)</h3>
                 <p>
-                  To ensure 100% of your broadcast emails land directly in the recipient's Primary Inbox and never in
-                  Promotions or Spam, configure these 3 TXT records at your domain registrar (GoDaddy, Cloudflare, Namecheap):
+                  To ensure 100% of your Brevo broadcast emails land directly in the recipient's Primary Inbox and never in
+                  Promotions or Spam, configure these 3 TXT records at your domain registrar (Cloudflare, GoDaddy, Namecheap):
                 </p>
               </div>
             </div>
@@ -1501,18 +1787,18 @@ export function EmailAutomationWorkspace({
                   <code>TXT @</code>
                 </div>
                 <strong>Sender Policy Framework</strong>
-                <p>Authorizes your email service provider IP address to send emails on behalf of your domain.</p>
-                <pre>v=spf1 include:resend.com ~all</pre>
+                <p>Authorizes Brevo mail servers (IP 185.107.232.0/22) to send emails on behalf of your domain.</p>
+                <pre>v=spf1 include:spf.brevo.com ~all</pre>
               </div>
 
               <div className="dns-record-item">
                 <div className="record-top">
-                  <span className="record-badge">2. DKIM RECORD</span>
-                  <code>CNAME / TXT</code>
+                  <span className="record-badge">2. BREVO DKIM RECORD</span>
+                  <code>TXT / CNAME</code>
                 </div>
                 <strong>DomainKeys Identified Mail</strong>
-                <p>Digitally signs your emails with a cryptographic public/private key pair to verify authenticity.</p>
-                <pre>resend._domainkey.yourdomain.com</pre>
+                <p>Digitally signs your emails with Brevo's cryptographic key pair to guarantee authenticity.</p>
+                <pre>mail._domainkey.foodbusinesscoach.online</pre>
               </div>
 
               <div className="dns-record-item">
@@ -1521,8 +1807,8 @@ export function EmailAutomationWorkspace({
                   <code>TXT _dmarc</code>
                 </div>
                 <strong>Domain Message Authentication</strong>
-                <p>Enforces strict policies against spoofing and phishing, dramatically boosting inbox reputation.</p>
-                <pre>v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com</pre>
+                <p>Enforces strict policies against email spoofing and phishing, maximizing inbox reputation.</p>
+                <pre>v=DMARC1; p=none; rua=mailto:mentor@foodbusinesscoach.online</pre>
               </div>
             </div>
           </div>
@@ -1595,6 +1881,11 @@ export function EmailAutomationWorkspace({
                         <CheckCircle2 size={12} />
                         {bc.status}
                       </span>
+                      {bc.deliveryEngine && (
+                        <small className="engine-subtag" style={{ display: 'block', fontSize: '.68rem', color: 'var(--muted)', marginTop: '3px' }}>
+                          {bc.deliveryEngine}
+                        </small>
+                      )}
                     </td>
                     <td>
                       <button
@@ -1766,6 +2057,129 @@ export function EmailAutomationWorkspace({
               >
                 <CheckCircle2 size={14} />
                 Save to Library
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 3: BREVO INTEGRATION SETTINGS ─────────────────────── */}
+      {showBrevoModal && (
+        <div className="modal-backdrop" onClick={() => setShowBrevoModal(false)}>
+          <div className="modal brevo-settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-wrap">
+                <Zap size={20} className="brevo-zap-icon" />
+                <h3>Brevo Email Integration &amp; API Key</h3>
+              </div>
+              <button
+                type="button"
+                className="close-modal-btn"
+                onClick={() => setShowBrevoModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <p className="modal-lead">
+                Connect your Brevo (formerly Sendinblue) account to dispatch automated cohort broadcasts and mentor updates to enrolled founders.
+              </p>
+
+              {brevoTestStatus && (
+                <div className={`brevo-test-banner ${brevoTestStatus.ok ? 'success' : 'error'}`}>
+                  {brevoTestStatus.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  <span>{brevoTestStatus.message}</span>
+                </div>
+              )}
+
+              <div className="form-group">
+                <div className="field-label-row">
+                  <label htmlFor="brevo-api-key-input">Brevo v3 API Key (starts with <code>xkeysib-...</code>)</label>
+                  <a
+                    href="https://app.brevo.com/settings/keys/api"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="external-link-inline"
+                  >
+                    Get API Key <ExternalLink size={12} />
+                  </a>
+                </div>
+                <input
+                  id="brevo-api-key-input"
+                  type="password"
+                  placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxx"
+                  value={brevoApiKeyInput}
+                  onChange={(e) => {
+                    setBrevoApiKeyInput(e.target.value);
+                    setBrevoTestStatus(null);
+                  }}
+                  autoFocus
+                />
+                <small className="form-help-text">
+                  Generated in your Brevo account under <strong>SMTP &amp; API &gt; API Keys</strong>.
+                </small>
+              </div>
+
+              <div className="form-grid-two">
+                <div className="form-group">
+                  <label>Sender Name</label>
+                  <input
+                    type="text"
+                    value={brevoSenderNameInput}
+                    onChange={(e) => setBrevoSenderNameInput(e.target.value)}
+                    placeholder="Manmath Biradar"
+                  />
+                </div>
+                <div className="form-group">
+                  <div className="field-label-row">
+                    <label>Verified Sender Email</label>
+                    <a
+                      href="https://app.brevo.com/senders"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="external-link-inline"
+                    >
+                      Senders <ExternalLink size={12} />
+                    </a>
+                  </div>
+                  <input
+                    type="email"
+                    value={brevoSenderEmailInput}
+                    onChange={(e) => setBrevoSenderEmailInput(e.target.value)}
+                    placeholder="mentor@foodbusinesscoach.online"
+                  />
+                </div>
+              </div>
+
+              <div className="brevo-specs-box">
+                <h4>Brevo SMTP Relay Config (For Server Auth Emails)</h4>
+                <div className="specs-row-grid">
+                  <div><span className="s-label">SMTP Host:</span> <code>smtp-relay.brevo.com</code></div>
+                  <div><span className="s-label">Port:</span> <code>587</code></div>
+                  <div><span className="s-label">Encryption:</span> <code>STARTTLS (secure: false)</code></div>
+                  <div><span className="s-label">Free Allowance:</span> <code>300 emails/day forever</code></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="button outline test-brevo-btn"
+                disabled={isTestingBrevo || !brevoApiKeyInput.trim()}
+                onClick={() => testBrevoConnection(brevoApiKeyInput)}
+              >
+                {isTestingBrevo ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />}
+                {isTestingBrevo ? 'Testing Connection...' : 'Test API Key'}
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                onClick={handleSaveBrevoSettings}
+              >
+                <CheckCircle2 size={14} />
+                Save Brevo Settings
               </button>
             </div>
           </div>
