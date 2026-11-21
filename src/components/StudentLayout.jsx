@@ -1,11 +1,15 @@
-import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Compass, Settings, Layers, LogOut, MessageSquare, Users } from 'lucide-react';
+import { NavLink, Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Compass, Settings, Layers, LogOut, MessageSquare, Users, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Brand } from './shared';
 import { ThemeToggle } from './ThemeToggle';
 
 export function StudentLayout({ children }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const isEmailsActive = location.pathname === '/admin' && location.search.includes('tab=emails');
+  const isOwnerActive = location.pathname === '/admin' && !location.search.includes('tab=emails');
+
   return (
     <div className="student-layout">
       <aside className="student-sidebar">
@@ -33,10 +37,19 @@ export function StudentLayout({ children }) {
             My account
           </NavLink>
           {user?.role === 'admin' && (
-            <NavLink to="/admin">
-              <Layers size={19} />
-              Owner dashboard
-            </NavLink>
+            <>
+              <div className="sidebar-label" style={{ marginTop: '14px', fontSize: '.64rem', letterSpacing: '.08em', color: 'var(--muted)' }}>
+                OWNER CONTROLS
+              </div>
+              <NavLink to="/admin" end className={() => (isOwnerActive ? 'active' : '')}>
+                <Layers size={19} />
+                Owner dashboard
+              </NavLink>
+              <NavLink to="/admin?tab=emails" className={() => (isEmailsActive ? 'active' : '')}>
+                <Send size={19} />
+                Email Automations
+              </NavLink>
+            </>
           )}
         </nav>
         <div className="sidebar-bottom">

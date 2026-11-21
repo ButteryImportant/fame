@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Save,
@@ -24,11 +24,13 @@ import {
   FileText,
   HelpCircle,
   Mail,
+  Send,
 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { StudentLayout } from './components/StudentLayout';
 import { Notice, Loader, formatVideoEmbedUrl } from './components/shared';
 import { UsersDirectoryWorkspace } from './components/UsersDirectoryWorkspace';
+import { EmailAutomationWorkspace } from './components/EmailAutomationWorkspace';
 import { api, money } from './api.js';
 
 const blankCourse = {
@@ -59,8 +61,10 @@ const courseBody = (c) => Object.fromEntries(Object.keys(blankCourse).map((k) =>
 
 export function Admin() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab');
   const [data, setData] = useState(null);
-  const [view, setView] = useState('overview'); // 'overview' | 'course' | 'settings' | 'orders'
+  const [view, setView] = useState(initialTab === 'emails' ? 'emails' : 'overview'); // 'overview' | 'emails' | 'course' | 'settings' | 'users' | 'access'
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -73,6 +77,17 @@ export function Admin() {
   const [grantCourseId, setGrantCourseId] = useState('');
   const [grantBusy, setGrantBusy] = useState(false);
   const [accessSearch, setAccessSearch] = useState('');
+
+  // Sync with URL query parameter
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'emails') {
+      setView('emails');
+      loadUsers().catch(() => {});
+    } else if (tab && ['overview', 'users', 'access', 'settings'].includes(tab)) {
+      setView(tab);
+    }
+  }, [searchParams]);
 
   // Accounts & Email DB state
   const [users, setUsers] = useState([]);
@@ -343,6 +358,7 @@ export function Admin() {
             className={view === 'overview' ? 'active' : ''}
             onClick={() => {
               setView('overview');
+              setSearchParams({});
               setMessage('');
               setError('');
             }}
@@ -351,9 +367,23 @@ export function Admin() {
             Programmes &amp; Overview
           </button>
           <button
+            className={view === 'emails' ? 'active' : ''}
+            onClick={() => {
+              setView('emails');
+              setSearchParams({ tab: 'emails' });
+              setMessage('');
+              setError('');
+              loadUsers().catch(() => {});
+            }}
+          >
+            <Send size={16} />
+            Email Automations &amp; Broadcast
+          </button>
+          <button
             className={view === 'users' ? 'active' : ''}
             onClick={() => {
               setView('users');
+              setSearchParams({ tab: 'users' });
               setMessage('');
               setError('');
               loadUsers();
@@ -367,6 +397,7 @@ export function Admin() {
             className={view === 'access' ? 'active' : ''}
             onClick={() => {
               setView('access');
+              setSearchParams({ tab: 'access' });
               setMessage('');
               setError('');
               loadEnrolments();
@@ -379,6 +410,7 @@ export function Admin() {
             className={view === 'settings' ? 'active' : ''}
             onClick={() => {
               setView('settings');
+              setSearchParams({ tab: 'settings' });
               setMessage('');
               setError('');
             }}
@@ -510,6 +542,13 @@ export function Admin() {
             {!data.orders.length && <p className="muted" style={{ padding: '24px' }}>No orders recorded yet.</p>}
           </div>
         </>
+      ) : view === 'emails' ? (
+        <EmailAutomationWorkspace
+          users={users}
+          courses={data.courses || []}
+          onRefreshUsers={loadUsers}
+          currentUser={user}
+        />
       ) : view === 'settings' ? (
         <SettingsForm
           data={data.settings}
