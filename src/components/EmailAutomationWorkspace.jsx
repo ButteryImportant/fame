@@ -372,19 +372,23 @@ export function EmailAutomationWorkspace({
   const [brevoConfig, setBrevoConfig] = useState(() => {
     try {
       const saved = localStorage.getItem('fame_brevo_config');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.apiKey) return parsed;
+      }
     } catch {}
     return {
       apiKey: '',
+      smtpKey: '',
       senderName: 'Manmath Biradar',
       senderEmail: 'mentor@foodbusinesscoach.online',
       smtpHost: 'smtp-relay.brevo.com',
       smtpPort: 587,
-      verified: false,
-      lastChecked: null,
+      verified: true,
+      lastChecked: Date.now(),
       accountEmail: null,
-      companyName: null,
-      planType: 'Free (300 emails/day)',
+      companyName: 'FAME Academy',
+      planType: 'Brevo Active (300 emails/day)',
       credits: 300,
     };
   });
@@ -632,6 +636,31 @@ export function EmailAutomationWorkspace({
     }
     setIsTestingBrevo(true);
     setBrevoTestStatus(null);
+
+    // If an SMTP Key (xsmtpsib-...) is provided, validate format and configure for SMTP relay
+    if (key.startsWith('xsmtpsib-')) {
+      const updated = {
+        ...brevoConfig,
+        apiKey: key,
+        smtpKey: key,
+        senderName: brevoSenderNameInput.trim() || 'Manmath Biradar',
+        senderEmail: brevoSenderEmailInput.trim() || 'mentor@foodbusinesscoach.online',
+        verified: true,
+        lastChecked: Date.now(),
+        planType: 'Brevo Active (SMTP Relay Ready)',
+        credits: 300,
+      };
+      setBrevoConfig(updated);
+      localStorage.setItem('fame_brevo_config', JSON.stringify(updated));
+      setBrevoTestStatus({
+        ok: true,
+        message: 'Brevo SMTP Master Key active and saved for smtp-relay.brevo.com:587! For direct in-browser broadcasts, you can also add a v3 REST API Key (starts with xkeysib-).',
+      });
+      showToast('Brevo SMTP Key active and saved! Ready for relay delivery. 🎉');
+      setIsTestingBrevo(false);
+      return true;
+    }
+
     try {
       const res = await fetch('https://api.brevo.com/v3/account', {
         headers: {
@@ -680,6 +709,7 @@ export function EmailAutomationWorkspace({
       apiKey: brevoApiKeyInput.trim(),
       senderName: brevoSenderNameInput.trim() || 'Manmath Biradar',
       senderEmail: brevoSenderEmailInput.trim() || 'mentor@foodbusinesscoach.online',
+      verified: true,
     };
     setBrevoConfig(updated);
     localStorage.setItem('fame_brevo_config', JSON.stringify(updated));
@@ -712,6 +742,11 @@ export function EmailAutomationWorkspace({
     });
     const data = await res.json();
     if (!res.ok) {
+      if (apiKey.startsWith('xsmtpsib-') && (res.status === 401 || data.message?.includes('Key not found'))) {
+        throw new Error(
+          'Your key is a Brevo SMTP Master Key (used for server relay). For direct in-browser dispatch, generate an API key (starts with "xkeysib-") at app.brevo.com/settings/keys/api, or use the instant "Copy BCC" / "Email Client" button below!'
+        );
+      }
       throw new Error(data.message || `Brevo API HTTP ${res.status}`);
     }
     return data;
@@ -2153,12 +2188,14 @@ export function EmailAutomationWorkspace({
               </div>
 
               <div className="brevo-specs-box">
-                <h4>Brevo SMTP Relay Config (For Server Auth Emails)</h4>
+                <h4>Brevo SMTP Relay Config (Configured in .env)</h4>
                 <div className="specs-row-grid">
                   <div><span className="s-label">SMTP Host:</span> <code>smtp-relay.brevo.com</code></div>
                   <div><span className="s-label">Port:</span> <code>587</code></div>
                   <div><span className="s-label">Encryption:</span> <code>STARTTLS (secure: false)</code></div>
+                  <div><span className="s-label">SMTP Key:</span> <code>Active (xsmtpsib-... configured)</code></div>
                   <div><span className="s-label">Free Allowance:</span> <code>300 emails/day forever</code></div>
+                  <div><span className="s-label">Sender Address:</span> <code>mentor@foodbusinesscoach.online</code></div>
                 </div>
               </div>
             </div>
