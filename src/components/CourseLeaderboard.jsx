@@ -9,12 +9,11 @@ import {
   Clock,
   CheckCircle2,
   ChevronRight,
-  Sparkles,
-  ArrowRight,
   TrendingUp,
 } from 'lucide-react';
 import { COURSE_TIERS, getCourseLeaderboard, getStoredUserXP } from '../utils/xpSystem';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../api';
 
 export function CourseLeaderboard({
   initialCourseId = 'blueprint',
@@ -25,6 +24,7 @@ export function CourseLeaderboard({
   const { user } = useAuth();
   const [selectedCourseId, setSelectedCourseId] = useState(initialCourseId);
   const [xpRevision, setXpRevision] = useState(0);
+  const [actualMembers, setActualMembers] = useState(liveMembers);
 
   // Keep synced if parent changes initialCourseId
   useEffect(() => {
@@ -32,6 +32,21 @@ export function CourseLeaderboard({
       setSelectedCourseId(initialCourseId);
     }
   }, [initialCourseId]);
+
+  // Load real registered members if not passed by parent
+  useEffect(() => {
+    if (liveMembers && liveMembers.length > 0) {
+      setActualMembers(liveMembers);
+    } else {
+      api('/community/members')
+        .then((res) => {
+          setActualMembers(res.members || []);
+        })
+        .catch((err) => {
+          console.warn('Could not load live members for leaderboard:', err);
+        });
+    }
+  }, [liveMembers]);
 
   // Listen to live XP updates from video watch timer
   useEffect(() => {
@@ -45,11 +60,10 @@ export function CourseLeaderboard({
   const { tierInfo, leaderboard, userRank, userEntry, totalParticipants } = getCourseLeaderboard(
     selectedCourseId,
     user,
-    liveMembers
+    actualMembers
   );
 
   const top3 = leaderboard.slice(0, 3);
-  const rest = leaderboard.slice(3);
 
   function handleTabChange(courseId) {
     setSelectedCourseId(courseId);
@@ -137,131 +151,152 @@ export function CourseLeaderboard({
         </div>
       </div>
 
-      {/* ─── Top 3 Podium (Desktop & Tablet) ─────────────────────────── */}
-      {!compact && top3.length === 3 && (
+      {/* ─── Top 3 Podium (Only shown if at least 2 real members exist) ─── */}
+      {!compact && top3.length >= 2 && (
         <div className="leaderboard-podium-row">
           {/* 2nd Place */}
-          <div className="podium-card rank-2">
-            <div className="podium-avatar-wrap">
-              <span className="podium-crown silver">🥈</span>
-              <div className="podium-avatar" style={{ background: top3[1].avatarBg }}>
-                {top3[1].avatar_url ? (
-                  <img src={top3[1].avatar_url} alt={top3[1].name} />
-                ) : (
-                  top3[1].name.charAt(0)
-                )}
+          {top3[1] && (
+            <div className="podium-card rank-2">
+              <div className="podium-avatar-wrap">
+                <span className="podium-crown silver">🥈</span>
+                <div className="podium-avatar" style={{ background: top3[1].avatarBg }}>
+                  {top3[1].avatar_url ? (
+                    <img src={top3[1].avatar_url} alt={top3[1].name} />
+                  ) : (
+                    top3[1].name.charAt(0)
+                  )}
+                </div>
               </div>
+              <span className="podium-rank-tag">#2</span>
+              <strong className="podium-name">{top3[1].name}</strong>
+              <span className="podium-handle">@{top3[1].handle}</span>
+              <div className="podium-xp-pill">
+                <Zap size={13} />
+                <span>{top3[1].xp} XP</span>
+              </div>
+              <small className="podium-meta">{top3[1].minutesWatched} mins</small>
             </div>
-            <span className="podium-rank-tag">#2</span>
-            <strong className="podium-name">{top3[1].name}</strong>
-            <span className="podium-handle">@{top3[1].handle}</span>
-            <div className="podium-xp-pill">
-              <Zap size={13} />
-              <span>{top3[1].xp} XP</span>
-            </div>
-            <small className="podium-meta">{top3[1].minutesWatched} mins</small>
-          </div>
+          )}
 
           {/* 1st Place */}
-          <div className="podium-card rank-1 champion">
-            <div className="podium-avatar-wrap">
-              <span className="podium-crown gold">🥇</span>
-              <div className="podium-avatar champ" style={{ background: top3[0].avatarBg }}>
-                {top3[0].avatar_url ? (
-                  <img src={top3[0].avatar_url} alt={top3[0].name} />
-                ) : (
-                  top3[0].name.charAt(0)
-                )}
+          {top3[0] && (
+            <div className="podium-card rank-1 champion">
+              <div className="podium-avatar-wrap">
+                <span className="podium-crown gold">🥇</span>
+                <div className="podium-avatar champ" style={{ background: top3[0].avatarBg }}>
+                  {top3[0].avatar_url ? (
+                    <img src={top3[0].avatar_url} alt={top3[0].name} />
+                  ) : (
+                    top3[0].name.charAt(0)
+                  )}
+                </div>
               </div>
+              <span className="podium-rank-tag gold">#1 Leader</span>
+              <strong className="podium-name">{top3[0].name}</strong>
+              <span className="podium-handle">@{top3[0].handle}</span>
+              <div className="podium-xp-pill gold">
+                <Zap size={14} />
+                <span>{top3[0].xp} XP</span>
+              </div>
+              <small className="podium-meta">{top3[0].minutesWatched} mins</small>
             </div>
-            <span className="podium-rank-tag gold">#1 Leader</span>
-            <strong className="podium-name">{top3[0].name}</strong>
-            <span className="podium-handle">@{top3[0].handle}</span>
-            <div className="podium-xp-pill gold">
-              <Zap size={14} />
-              <span>{top3[0].xp} XP</span>
-            </div>
-            <small className="podium-meta">{top3[0].minutesWatched} mins</small>
-          </div>
+          )}
 
           {/* 3rd Place */}
-          <div className="podium-card rank-3">
-            <div className="podium-avatar-wrap">
-              <span className="podium-crown bronze">🥉</span>
-              <div className="podium-avatar" style={{ background: top3[2].avatarBg }}>
-                {top3[2].avatar_url ? (
-                  <img src={top3[2].avatar_url} alt={top3[2].name} />
-                ) : (
-                  top3[2].name.charAt(0)
-                )}
+          {top3[2] && (
+            <div className="podium-card rank-3">
+              <div className="podium-avatar-wrap">
+                <span className="podium-crown bronze">🥉</span>
+                <div className="podium-avatar" style={{ background: top3[2].avatarBg }}>
+                  {top3[2].avatar_url ? (
+                    <img src={top3[2].avatar_url} alt={top3[2].name} />
+                  ) : (
+                    top3[2].name.charAt(0)
+                  )}
+                </div>
               </div>
+              <span className="podium-rank-tag">#3</span>
+              <strong className="podium-name">{top3[2].name}</strong>
+              <span className="podium-handle">@{top3[2].handle}</span>
+              <div className="podium-xp-pill">
+                <Zap size={13} />
+                <span>{top3[2].xp} XP</span>
+              </div>
+              <small className="podium-meta">{top3[2].minutesWatched} mins</small>
             </div>
-            <span className="podium-rank-tag">#3</span>
-            <strong className="podium-name">{top3[2].name}</strong>
-            <span className="podium-handle">@{top3[2].handle}</span>
-            <div className="podium-xp-pill">
-              <Zap size={13} />
-              <span>{top3[2].xp} XP</span>
-            </div>
-            <small className="podium-meta">{top3[2].minutesWatched} mins</small>
-          </div>
+          )}
         </div>
       )}
 
-      {/* ─── Full Leaderboard List ────────────────────────────────────── */}
+      {/* ─── Full Real Member Leaderboard List ────────────────────────── */}
       <div className="leaderboard-list">
         <div className="leaderboard-list-head">
           <span>Rank &amp; Founder</span>
           <span>Watch Time &amp; XP</span>
         </div>
 
-        {leaderboard.map((item) => {
-          const isUser = item.isCurrentUser;
-          const isTop3 = item.rank <= 3;
-          return (
-            <div
-              key={item.id}
-              className={`leaderboard-row ${isUser ? 'current-user-row' : ''} ${isTop3 ? `top-${item.rank}` : ''}`}
-            >
-              <div className="leaderboard-row-left">
-                <span className={`leaderboard-rank-number ${isTop3 ? `rank-${item.rank}` : ''}`}>
-                  {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : `#${item.rank}`}
-                </span>
+        {leaderboard.length === 0 ? (
+          <div className="leaderboard-empty-state" style={{ padding: '30px 16px', textAlign: 'center' }}>
+            <Trophy size={32} style={{ color: '#94a3b8', margin: '0 auto 10px' }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>No enrolled members in {tierInfo.tierName} yet.</p>
+            <small style={{ color: 'var(--muted)' }}>
+              Enrol and complete masterclasses to earn XP and take the #1 rank!
+            </small>
+          </div>
+        ) : (
+          leaderboard.map((item) => {
+            const isUser = item.isCurrentUser;
+            const isTop3 = item.rank <= 3;
+            return (
+              <div
+                key={item.id}
+                className={`leaderboard-row ${isUser ? 'current-user-row' : ''} ${isTop3 ? `top-${item.rank}` : ''}`}
+              >
+                <div className="leaderboard-row-left">
+                  <span className={`leaderboard-rank-number ${isTop3 ? `rank-${item.rank}` : ''}`}>
+                    {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : `#${item.rank}`}
+                  </span>
 
-                <div className="leaderboard-avatar" style={{ background: item.avatarBg }}>
-                  {item.avatar_url ? (
-                    <img src={item.avatar_url} alt={item.name} />
-                  ) : (
-                    item.name.charAt(0)
-                  )}
-                </div>
-
-                <div className="leaderboard-founder-copy">
-                  <div className="founder-name-row">
-                    <span className="founder-name">
-                      {item.name}
-                      {isUser && <span className="you-tag">You</span>}
-                    </span>
-                    <span className="founder-handle">@{item.handle}</span>
+                  <div className="leaderboard-avatar" style={{ background: item.avatarBg }}>
+                    {item.avatar_url ? (
+                      <img src={item.avatar_url} alt={item.name} />
+                    ) : (
+                      item.name.charAt(0)
+                    )}
                   </div>
-                  <span className="founder-headline">{item.headline}</span>
-                </div>
-              </div>
 
-              <div className="leaderboard-row-right">
-                <div className="leaderboard-xp-chip">
-                  <Zap size={13} className="xp-icon" />
-                  <strong>{item.xp} XP</strong>
+                  <div className="leaderboard-founder-copy">
+                    <div className="founder-name-row">
+                      {isUser ? (
+                        <span className="founder-name">
+                          {item.name} <span className="you-tag">You</span>
+                        </span>
+                      ) : (
+                        <Link to={`/u/${item.handle}`} className="founder-name" title={`View @${item.handle}`}>
+                          {item.name}
+                        </Link>
+                      )}
+                      <span className="founder-handle">@{item.handle}</span>
+                    </div>
+                    {item.headline && <span className="founder-headline">{item.headline}</span>}
+                  </div>
                 </div>
-                <div className="leaderboard-time-meta">
-                  <span>{item.minutesWatched}m</span>
-                  <span className="pipe-sep">·</span>
-                  <span>{item.lessonsCompleted} done</span>
+
+                <div className="leaderboard-row-right">
+                  <div className="leaderboard-xp-chip">
+                    <Zap size={13} className="xp-icon" />
+                    <strong>{item.xp} XP</strong>
+                  </div>
+                  <div className="leaderboard-time-meta">
+                    <span>{item.minutesWatched}m</span>
+                    <span className="pipe-sep">·</span>
+                    <span>{item.lessonsCompleted} done</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );

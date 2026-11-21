@@ -10,7 +10,6 @@ import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { Notice, Loader } from '../components/shared';
 import { CourseLeaderboard } from '../components/CourseLeaderboard';
-import { getAllPeerMembers } from '../utils/xpSystem';
 import { api } from '../api.js';
 
 const CATEGORIES = [
@@ -99,7 +98,7 @@ export function Community() {
     }
   }
 
-  // Load Enrolled Members
+  // Load Real Enrolled Members Only
   async function loadMembers() {
     try {
       setLoadingMembers(true);
@@ -108,55 +107,32 @@ export function Community() {
       if (memberCourse !== 'all') q.set('courseId', memberCourse);
       if (memberSort) q.set('sort', memberSort);
 
-      let dbMembers = [];
-      try {
-        const res = await api(`/community/members?${q.toString()}`);
-        dbMembers = res.members || [];
-      } catch (err) {
-        console.warn('API members unavailable, directory fallback:', err);
-      }
+      const res = await api(`/community/members?${q.toString()}`);
+      const raw = res.members || [];
 
-      // Merge with peer founders across Silver, Gold, and Diamond tiers
-      const peerMembers = getAllPeerMembers();
-      const existingHandles = new Set(dbMembers.map((m) => (m.handle || '').toLowerCase()));
-      const combined = [...dbMembers];
-
-      for (const p of peerMembers) {
-        if (!existingHandles.has(p.handle.toLowerCase())) {
-          const s = memberSearch.trim().toLowerCase();
-          const matchesSearch =
-            !s ||
-            p.name.toLowerCase().includes(s) ||
-            p.handle.toLowerCase().includes(s) ||
-            p.headline.toLowerCase().includes(s) ||
-            p.location.toLowerCase().includes(s);
-
-          const matchesCourse =
-            memberCourse === 'all' ||
-            (memberCourse === 'blueprint' && (p.tier === 'silver' || p.courseId === 'blueprint')) ||
-            (memberCourse === 'accelerator' && (p.tier === 'gold' || p.courseId === 'accelerator')) ||
-            (memberCourse === 'mastery' && (p.tier === 'diamond' || p.courseId === 'mastery')) ||
-            memberCourse === p.tier;
-
-          if (matchesSearch && matchesCourse) {
-            combined.push(p);
+      // Extract unique courses list for filter dropdown
+      const coursesMap = new Map();
+      raw.forEach((m) => {
+        (m.enrolled_courses || []).forEach((c) => {
+          if (!coursesMap.has(c.id)) {
+            coursesMap.set(c.id, c.title);
           }
-        }
-      }
+        });
+      });
 
-      if (memberSort === 'alphabetical') {
-        combined.sort((a, b) => a.name.localeCompare(b.name));
-      }
-
-      setMembers(combined);
-
-      setCoursesList([
-        { id: 'blueprint', title: 'Food Business Blueprint (Silver Tier)' },
-        { id: 'accelerator', title: 'Food Business Accelerator (Gold Tier)' },
-        { id: 'mastery', title: 'Food Business Mastery (Diamond Tier)' },
-      ]);
+      setMembers(raw);
+      setCoursesList(
+        coursesMap.size > 0
+          ? Array.from(coursesMap.entries()).map(([id, title]) => ({ id, title }))
+          : [
+              { id: 'blueprint', title: 'Food Business Blueprint (Silver Tier)' },
+              { id: 'accelerator', title: 'Food Business Accelerator (Gold Tier)' },
+              { id: 'mastery', title: 'Food Business Mastery (Diamond Tier)' },
+            ]
+      );
     } catch (e) {
       console.error('Failed to load members:', e);
+      setMembers([]);
     } finally {
       setLoadingMembers(false);
     }

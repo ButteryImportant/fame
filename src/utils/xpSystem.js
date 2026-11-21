@@ -1,5 +1,6 @@
 // ─── FAME XP & Gamification Engine ───────────────────────────────────────────
 // Rule: 2 XP for every 1 minute (60 seconds) watched (1 XP per 30 seconds).
+// ONLY real registered individuals from the database and authenticated users are tracked.
 
 export const XP_PER_MINUTE = 2;
 export const SECONDS_PER_XP = 30; // 30 seconds = 1 XP => 60 seconds = 2 XP
@@ -181,237 +182,55 @@ export function awardLessonCompletionXP(userId, courseId, lessonId) {
   };
 }
 
-// ─── Seeded Peer Entrepreneurs for Dynamic Leaderboards ──────────────────────
-const PEER_ENTREPRENEURS = {
-  silver: [
-    {
-      id: 'p-sil-1',
-      name: 'Ramesh Kulkarni',
-      handle: 'ramesh_millets',
-      headline: 'Founder, Sahyadri Millets & Grain Flour',
-      location: 'Pune, Maharashtra',
-      baseXP: 380,
-      lessonsCompleted: 14,
-      totalLessons: 15,
-      avatarBg: '#2a5a40',
-      badge: 'Silver Champion',
-    },
-    {
-      id: 'p-sil-2',
-      name: 'Priya Deshmukh',
-      handle: 'priya_sauces',
-      headline: 'Crafting Artisanal Farm-to-Jar Dips',
-      location: 'Nashik, Maharashtra',
-      baseXP: 320,
-      lessonsCompleted: 12,
-      totalLessons: 15,
-      avatarBg: '#1e4838',
-      badge: 'Formula Specialist',
-    },
-    {
-      id: 'p-sil-3',
-      name: 'Ananya Sharma',
-      handle: 'ananya_oils',
-      headline: 'Cold-Pressed Wood Churn Mustard & Sesame',
-      location: 'Jaipur, Rajasthan',
-      baseXP: 260,
-      lessonsCompleted: 10,
-      totalLessons: 15,
-      avatarBg: '#344e41',
-      badge: 'Unit Economics Pro',
-    },
-    {
-      id: 'p-sil-4',
-      name: 'Vikram Patil',
-      handle: 'vikram_spices',
-      headline: 'Kolhapur Heritage Spice Blends & Masalas',
-      location: 'Kolhapur, Maharashtra',
-      baseXP: 210,
-      lessonsCompleted: 8,
-      totalLessons: 15,
-      avatarBg: '#3d5a80',
-      badge: 'Launch Planner',
-    },
-    {
-      id: 'p-sil-5',
-      name: 'Sunita Rao',
-      handle: 'sunita_agro',
-      headline: 'Solar Dehydrated Seasonal Fruit Powders',
-      location: 'Belgaum, Karnataka',
-      baseXP: 170,
-      lessonsCompleted: 7,
-      totalLessons: 15,
-      avatarBg: '#4a4e69',
-      badge: 'Pilot Batcher',
-    },
-    {
-      id: 'p-sil-6',
-      name: 'Amit Verma',
-      handle: 'amit_dairy',
-      headline: 'A2 Gir Cow Ghee & Value-Added Paneer',
-      location: 'Indore, MP',
-      baseXP: 140,
-      lessonsCompleted: 5,
-      totalLessons: 15,
-      avatarBg: '#588157',
-      badge: 'Foundation Builder',
-    },
-  ],
-  gold: [
-    {
-      id: 'p-gld-1',
-      name: 'Dr. Sanjay Mehta',
-      handle: 'sanjay_nutra',
-      headline: 'Botanical Extracts & Functional Immunity Drinks',
-      location: 'Ahmedabad, Gujarat',
-      baseXP: 720,
-      lessonsCompleted: 4,
-      totalLessons: 4,
-      avatarBg: '#1b4965',
-      badge: 'Gold Accelerator Master',
-    },
-    {
-      id: 'p-gld-2',
-      name: 'Kavita Nair',
-      handle: 'kavita_herbal',
-      headline: 'Ayurvedic Herbal Infusions & Tisanes',
-      location: 'Kochi, Kerala',
-      baseXP: 640,
-      lessonsCompleted: 4,
-      totalLessons: 4,
-      avatarBg: '#2b2d42',
-      badge: 'Co-Packer Strategist',
-    },
-    {
-      id: 'p-gld-3',
-      name: 'Rajesh Gupta',
-      handle: 'rajesh_snacks',
-      headline: 'Vacuum Fried Vegetable Chips & Puffs',
-      location: 'Surat, Gujarat',
-      baseXP: 510,
-      lessonsCompleted: 3,
-      totalLessons: 4,
-      avatarBg: '#3a5a40',
-      badge: 'Channel Architect',
-    },
-    {
-      id: 'p-gld-4',
-      name: 'Sneha Kulkarni',
-      handle: 'sneha_honey',
-      headline: 'Raw Forest Honey & Infused Syrups',
-      location: 'Nagpur, Maharashtra',
-      baseXP: 440,
-      lessonsCompleted: 3,
-      totalLessons: 4,
-      avatarBg: '#457b9d',
-      badge: 'Compliance Lead',
-    },
-    {
-      id: 'p-gld-5',
-      name: 'Rohan Joshi',
-      handle: 'rohan_frozen',
-      headline: 'Quick-Freeze Ready-to-Cook Regional Snacks',
-      location: 'Bengaluru, Karnataka',
-      baseXP: 360,
-      lessonsCompleted: 2,
-      totalLessons: 4,
-      avatarBg: '#606c38',
-      badge: 'Operations Setup',
-    },
-  ],
-  diamond: [
-    {
-      id: 'p-dia-1',
-      name: 'Siddharth Malhotra',
-      handle: 'siddharth_export',
-      headline: 'Managing Director, Deccan Agro Exports Ltd.',
-      location: 'Hyderabad, Telangana',
-      baseXP: 1420,
-      lessonsCompleted: 6,
-      totalLessons: 6,
-      avatarBg: '#0f172a',
-      badge: 'Diamond Titan',
-    },
-    {
-      id: 'p-dia-2',
-      name: 'Meenakshi Sundaram',
-      handle: 'meenakshi_staples',
-      headline: 'Multi-State Grain Processing & Distribution Hub',
-      location: 'Madurai, Tamil Nadu',
-      baseXP: 1240,
-      lessonsCompleted: 6,
-      totalLessons: 6,
-      avatarBg: '#1e293b',
-      badge: 'Commercial Master',
-    },
-    {
-      id: 'p-dia-3',
-      name: 'Arvind Singhania',
-      handle: 'arvind_institutions',
-      headline: 'B2B Institutional Supply & Cloud Kitchen Supplier',
-      location: 'New Delhi',
-      baseXP: 1050,
-      lessonsCompleted: 5,
-      totalLessons: 6,
-      avatarBg: '#111827',
-      badge: 'Scale Operator',
-    },
-    {
-      id: 'p-dia-4',
-      name: 'Bhavna Patel',
-      handle: 'bhavna_bakery',
-      headline: 'Clean-Label Sourdough & Gluten-Free Retail Chain',
-      location: 'Vadodara, Gujarat',
-      baseXP: 910,
-      lessonsCompleted: 5,
-      totalLessons: 6,
-      avatarBg: '#1f2937',
-      badge: 'Distribution Maven',
-    },
-  ],
-};
-
-// ─── Build Course Leaderboard ────────────────────────────────────────────────
+// ─── Build Course Leaderboard (STRICTLY REAL REGISTERED MEMBERS ONLY) ────────
 export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null, liveMembers = []) {
   const tierInfo = getTierInfo(courseId);
-  const tierKey = tierInfo.tier; // 'silver' | 'gold' | 'diamond'
-  const peers = PEER_ENTREPRENEURS[tierKey] || PEER_ENTREPRENEURS.silver;
+  const list = [];
 
-  // Read current user XP
-  const userXPData = currentUser ? getStoredUserXP(currentUser.id || currentUser.email) : { totalXP: 0, courseXP: {}, courseSeconds: {} };
+  // Read current authenticated user XP
+  const userXPData = currentUser
+    ? getStoredUserXP(currentUser.id || currentUser.email)
+    : { totalXP: 0, courseXP: {}, courseSeconds: {} };
   const userCourseXP = (userXPData.courseXP && userXPData.courseXP[courseId]) || 0;
-  const userMinutesWatched = Math.floor(((userXPData.courseSeconds && userXPData.courseSeconds[courseId]) || 0) / 60);
+  const userMinutesWatched = Math.floor(
+    ((userXPData.courseSeconds && userXPData.courseSeconds[courseId]) || 0) / 60
+  );
 
-  // Map peers
-  const list = peers.map((p) => ({
-    ...p,
-    xp: p.baseXP,
-    minutesWatched: Math.round(p.baseXP / 2),
-    isCurrentUser: false,
-  }));
-
-  // Merge live members from community database if they match this course
+  // 1. Process REAL registered members from the actual database
   if (Array.isArray(liveMembers) && liveMembers.length > 0) {
-    liveMembers.forEach((m, idx) => {
+    liveMembers.forEach((m) => {
       // Don't duplicate current user
-      if (currentUser && (m.id === currentUser.id || m.email === currentUser.email)) return;
+      if (
+        currentUser &&
+        (m.id === currentUser.id ||
+          (currentUser.email && m.email && m.email.toLowerCase() === currentUser.email.toLowerCase()))
+      ) {
+        return;
+      }
 
-      const isEnrolled = m.enrolled_courses?.some((c) => c.id === courseId);
+      // Check if this real member is enrolled in the selected course
+      const isEnrolled =
+        m.enrolled_courses?.some((c) => c.id === courseId) ||
+        (m.role === 'admin' && false); // admins aren't learners unless enrolled
+
       if (isEnrolled) {
-        // Calculate dynamic XP based on hash or index so it's consistent
-        const memberXP = 150 + ((idx * 67 + 31) % 400);
+        // Real user's completed lessons count
+        const completedCount = m.completed_count || (m.completed ? m.completed.length : 0);
+        // Base XP from real completed lessons (+10 XP per completed lesson)
+        const memberXP = completedCount * LESSON_COMPLETE_BONUS_XP;
+
         list.push({
           id: m.id,
           name: m.name,
-          handle: m.handle || m.email.split('@')[0],
-          headline: m.headline || 'Food Entrepreneur · FAME Founder',
-          location: m.location || 'India',
-          avatar_url: m.avatar_url,
+          handle: m.handle || (m.email ? m.email.split('@')[0] : `user_${m.id}`),
+          headline: m.headline || 'Registered FAME Member',
+          location: m.location || '',
+          avatar_url: m.avatar_url || m.avatar,
           avatarBg: '#1b3b2d',
-          badge: `${tierInfo.tierName} Founder`,
+          badge: `${tierInfo.tierName} Member`,
           xp: memberXP,
           minutesWatched: Math.round(memberXP / 2),
-          lessonsCompleted: Math.min(15, Math.floor(memberXP / 35)),
+          lessonsCompleted: completedCount,
           totalLessons: 15,
           isCurrentUser: false,
         });
@@ -419,9 +238,10 @@ export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null,
     });
   }
 
-  // Include current user
+  // 2. Include the current user if logged in
   if (currentUser) {
-    const userHandle = currentUser.handle || (currentUser.email ? currentUser.email.split('@')[0] : 'you');
+    const userHandle =
+      currentUser.handle || (currentUser.email ? currentUser.email.split('@')[0] : 'you');
     const userCompletedCount = Array.isArray(currentUser.completed) ? currentUser.completed.length : 0;
 
     const userEntry = {
@@ -429,8 +249,8 @@ export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null,
       name: `${currentUser.name || 'You'} (You)`,
       handle: userHandle,
       headline: currentUser.headline || 'Active Learner & FAME Founder',
-      location: currentUser.location || 'India',
-      avatar_url: currentUser.avatar_url,
+      location: currentUser.location || '',
+      avatar_url: currentUser.avatar_url || currentUser.avatar,
       avatarBg: '#125945',
       badge: `${tierInfo.tierName} Pioneer`,
       xp: userCourseXP,
@@ -442,7 +262,7 @@ export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null,
     list.push(userEntry);
   }
 
-  // Sort descending by XP
+  // Sort strictly descending by XP
   list.sort((a, b) => b.xp - a.xp || b.lessonsCompleted - a.lessonsCompleted);
 
   // Assign ranks
@@ -462,137 +282,4 @@ export function getCourseLeaderboard(courseId = 'blueprint', currentUser = null,
     userEntry,
     totalParticipants: rankedList.length,
   };
-}
-
-
-// ─── Get Peer Member Profile (Fallback & Rich Profiles) ───────────────────────
-export function getPeerProfile(handle) {
-  if (!handle) return null;
-  const h = handle.toLowerCase().replace(/^@/, '').trim();
-
-  for (const [tierKey, list] of Object.entries(PEER_ENTREPRENEURS)) {
-    const peer = list.find((p) => p.handle.toLowerCase() === h);
-    if (peer) {
-      const course = COURSE_TIERS[tierKey === 'silver' ? 'blueprint' : tierKey === 'gold' ? 'accelerator' : 'mastery'];
-      return {
-        profile: {
-          user_id: peer.id,
-          name: peer.name,
-          handle: peer.handle,
-          headline: peer.headline,
-          bio: `${peer.name} is a dedicated food entrepreneur in the FAME founder network. Validating formulation, unit economics, packaging and distribution for ${peer.headline.toLowerCase()}.`,
-          location: peer.location,
-          business_stage:
-            peer.lessonsCompleted >= peer.totalLessons
-              ? 'Commercial Scale'
-              : peer.lessonsCompleted > 6
-                ? 'Pilot Batch Validated'
-                : 'Formulation Stage',
-          website: `https://${peer.handle}.foodventures.in`,
-          linkedin: peer.handle,
-          instagram: peer.handle,
-          member_since: 1715000000000 + peer.baseXP * 100000,
-          role: 'founder',
-        },
-        badges: [
-          {
-            id: `${tierKey}_tier`,
-            title: `${course.tierName} Member`,
-            description: `Enrolled in ${course.title}`,
-            icon: 'Award',
-          },
-          {
-            id: 'validated_founder',
-            title: 'Food Business Founder',
-            description: 'Active validation & market testing',
-            icon: 'CheckCircle2',
-          },
-          {
-            id: 'xp_pioneer',
-            title: `${peer.baseXP} Founder XP`,
-            description: 'Earned 2 XP/min watching masterclass sessions',
-            icon: 'Sparkles',
-          },
-        ],
-        stats: {
-          totalXP: peer.baseXP,
-          lessonsCompleted: peer.lessonsCompleted,
-          questionsAsked: 2 + (peer.lessonsCompleted % 4),
-          solutionsShared: 3 + (peer.lessonsCompleted % 3),
-        },
-        enrolledCourses: [
-          {
-            id: course.id,
-            slug:
-              course.id === 'blueprint'
-                ? 'food-business-blueprint'
-                : course.id === 'accelerator'
-                  ? 'food-business-accelerator'
-                  : 'food-business-mastery',
-            title: course.title,
-            eyebrow: course.eyebrow,
-            level: course.level,
-            accent: course.accent,
-          },
-        ],
-        recentPosts: [
-          {
-            id: `post-${peer.id}`,
-            title: `Key learnings on packaging barrier and shelf-life testing for ${peer.headline.split('·')[0]}`,
-            category: 'Packaging & Compliance',
-            is_resolved: 1,
-            reply_count: 4,
-            upvotes: 9,
-            created_at: Date.now() - 86400000 * 5,
-          },
-        ],
-      };
-    }
-  }
-  return null;
-}
-
-// ─── Get All Peer Members (Structured by Tier) ──────────────────────────────
-export function getAllPeerMembers() {
-  const all = [];
-  for (const [tierKey, list] of Object.entries(PEER_ENTREPRENEURS)) {
-    const course = COURSE_TIERS[tierKey === 'silver' ? 'blueprint' : tierKey === 'gold' ? 'accelerator' : 'mastery'];
-    list.forEach((p) => {
-      all.push({
-        id: p.id,
-        name: p.name,
-        handle: p.handle,
-        headline: p.headline,
-        location: p.location,
-        avatar_url: p.avatar_url,
-        avatarBg: p.avatarBg,
-        business_stage:
-          p.lessonsCompleted >= p.totalLessons
-            ? 'Commercial Scale'
-            : p.lessonsCompleted > 6
-              ? 'Pilot Batch Validated'
-              : 'Formulation Stage',
-        role: 'founder',
-        tier: tierKey,
-        tierName: course.tierName,
-        courseId: course.id,
-        enrolled_courses: [
-          {
-            id: course.id,
-            title: course.title,
-            eyebrow: course.eyebrow,
-            level: course.level,
-            accent: course.accent,
-            slug:
-              course.id === 'blueprint'
-                ? 'food-business-blueprint'
-                : course.id === 'accelerator'
-                  ? 'food-business-accelerator'
-                  : 'food-business-mastery',
-          },
-        ],
-      });
-    });
-  }
-  return all;
 }
